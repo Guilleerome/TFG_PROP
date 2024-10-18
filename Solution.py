@@ -31,19 +31,17 @@ class Solution:
                         except ValueError:
                             #different row
                             pos_facility = row.index(facility)
-                            print(pos_facility)
+
                             for other_row in disposition:
                                 if i in other_row:
 
                                     pos_facility = row.index(facility)
                                     pos_i = other_row.index(i)
-                                    distance_to_facility = sum(plant.facilities[x] for x in row[pos_facility + 1:])
-                                    distance_to_i = sum(plant.facilities[x] for x in other_row[:pos_i])
-                                    distance_between_facilities = distance_to_facility + distance_to_i
-
-
+                                    distance_to_facility = sum(plant.facilities[x] for x in row[:pos_facility]) + plant.facilities[facility] / 2
+                                    distance_to_i = sum(plant.facilities[x] for x in other_row[:pos_i]) + plant.facilities[i] / 2
+                                    distance_between_facilities = abs(distance_to_facility - distance_to_i)
 
 
                         cost += plant.matrix[facility][i] * (plant.facilities[facility] / 2 + distance_between_facilities + plant.facilities[i] / 2)
-                        print(cost)
+
         return cost
