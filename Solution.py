@@ -1,7 +1,7 @@
 class Solution:
     def __init__(self, plant, disposition):
         self.plant = plant
-        self.dispositon = disposition
+        self.disposition = disposition
         self.cost = self.evaluate_cost(plant, disposition)
 
     def __str__(self):
@@ -13,7 +13,7 @@ class Solution:
             for facility in row:
                 plant.facilities[facility]
                 for i in range(plant.number):
-                    if facility != i:
+                    if facility != i and facility < i:
                         distance_between_facilities = 0
                         try:
                             pos_facility = row.index(facility)
@@ -27,7 +27,7 @@ class Solution:
                             for x in intermedias:
                                 distance_between_facilities += plant.facilities[x]
                                 # Agregar el costo calculado al costo total
-
+                            cost += plant.matrix[facility][i] * (plant.facilities[facility] / 2 + distance_between_facilities + plant.facilities[i] / 2)
                         except ValueError:
                             #different row
                             pos_facility = row.index(facility)
@@ -40,8 +40,12 @@ class Solution:
                                     distance_to_facility = sum(plant.facilities[x] for x in row[:pos_facility]) + plant.facilities[facility] / 2
                                     distance_to_i = sum(plant.facilities[x] for x in other_row[:pos_i]) + plant.facilities[i] / 2
                                     distance_between_facilities = abs(distance_to_facility - distance_to_i)
+                                    break
 
-
-                        cost += plant.matrix[facility][i] * (plant.facilities[facility] / 2 + distance_between_facilities + plant.facilities[i] / 2)
+                            cost += plant.matrix[facility][i] * distance_between_facilities
 
         return cost
+
+    def changeDisposition(self, d):
+        self.disposition = d
+        self.cost = self.evaluate_cost(self.plant, d)

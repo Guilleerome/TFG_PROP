@@ -2,6 +2,7 @@ import zipfile
 import Plant as plant_module
 
 def make_matrix_symmetric(m):
+    n = len(m)
     for i in range(n):
         for j in range(i + 1, n):  # Solo completar la parte inferior
             if j < len(m[i]):
@@ -16,7 +17,6 @@ rows = 2
 plants = []
 
 def read_instances():
-    global file, f, n
     for file in zip_file.namelist():
         if file.endswith('.txt'):
             with zip_file.open(file) as f:
@@ -42,7 +42,7 @@ def read_instances():
                         fila = list(map(int, linea_matriz.strip().split()))
                         distances.append(fila)
                 instance_name = file.split('/')[1].split('.')[0]
-                distances = make_matrix_symmetric(distances)
+                # distances = make_matrix_symmetric(distances)
                 plants.append(plant_module.Plant(instance_name, n, rows, facilities, distances))
     zip_file.close()
     return plants
