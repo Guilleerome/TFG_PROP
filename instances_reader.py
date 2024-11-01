@@ -22,15 +22,9 @@ def read_instances():
             with zip_file.open(file) as f:
                 n = int(f.readline().strip())
                 #capacity = n / rows
-                valores = list(map(int, f.readline().strip().split()))
+                facilities = list(map(int, f.readline().strip().split()))
                 # Crear un diccionario con n entradas
-                facilities = {}
-                #facilities_distribution = []
-                facilities = {i: valores[i] for i in range(n)}
-                '''for j in range(rows - 1):
-                    facilities_distribution.append(
-                        {(i + j * rows): valores[(i + j * rows)] for i in range(capacity.__floor__())})
-                facilities_distribution.append({i: valores[i] for i in range(n - capacity.__ceil__(), n)})'''
+                # facilities = {i: valores[i] for i in range(n)}
 
                 # Inicializar una lista para la matriz
                 distances = []
