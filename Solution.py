@@ -1,8 +1,10 @@
+import numpy as np
 class Solution:
     def __init__(self, plant=None, disposition=None, cost=None):
         self.plant = plant
         self.disposition = disposition
-        self.cost = cost if cost is not None else self.evaluate_cost(plant, disposition)
+        self.cost = cost if cost is not None else self.evaluate_cost_D(plant, disposition)
+
     def __lt__(self, other):
         return self.cost < other.cost
 
@@ -37,7 +39,6 @@ class Solution:
 
                             for other_row in disposition:
                                 if i in other_row:
-
                                     pos_facility = disposition[row].index(facility)
                                     pos_i = other_row.index(i)
                                     distance_to_facility = sum(plant.facilities[x] for x in disposition[row][:pos_facility]) + plant.facilities[facility] / 2
@@ -46,9 +47,27 @@ class Solution:
                                     break
                             # print(facility, i, distance_between_facilities)
                             cost += plant.matrix[facility][i] * distance_between_facilities
-
         return cost
 
     def changeDisposition(self, d):
         self.disposition = d
         self.cost = self.evaluate_cost(self.plant, d)
+
+    def evaluate_cost_D(self, plant, disposition):
+        n = len(plant.facilities)
+        origin_dist = [0] * n
+        for row in disposition:
+            dist_accum = 0
+            for elem in row:
+                # print(f"elem: {elem}; val = {dist_accum + plant.facilities[elem] / 2}")
+                origin_dist[elem] = dist_accum + plant.facilities[elem] / 2
+                dist_accum += plant.facilities[elem]
+        np_origin_dist = np.array(origin_dist).reshape(-1, 1)
+
+
+        m = np.squeeze(np.abs(np.subtract.outer(np_origin_dist, np_origin_dist)))
+        result = m * plant.matrix
+        #self.cost = result.sum() / 2
+        cost = np.sum(result) / 2
+        return cost
+

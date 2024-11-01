@@ -36,7 +36,7 @@ def read_instances():
                         fila = list(map(int, linea_matriz.strip().split()))
                         distances.append(fila)
                 instance_name = file.split('/')[1].split('.')[0]
-                # distances = make_matrix_symmetric(distances)
+                distances = make_matrix_symmetric(distances)
                 plants.append(plant_module.Plant(instance_name, n, rows, facilities, distances))
     zip_file.close()
     return plants
