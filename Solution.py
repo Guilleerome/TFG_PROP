@@ -62,10 +62,8 @@ class Solution:
                 # print(f"elem: {elem}; val = {dist_accum + plant.facilities[elem] / 2}")
                 origin_dist[elem] = dist_accum + plant.facilities[elem] / 2
                 dist_accum += plant.facilities[elem]
-        np_origin_dist = np.array(origin_dist).reshape(-1, 1)
 
-
-        m = np.squeeze(np.abs(np.subtract.outer(np_origin_dist, np_origin_dist)))
+        m = np.abs(np.subtract.outer(origin_dist, origin_dist))
         result = m * plant.matrix
         #self.cost = result.sum() / 2
         cost = np.sum(result) / 2

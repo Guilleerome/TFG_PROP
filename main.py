@@ -2,6 +2,7 @@ import instances_reader as ir
 import constructor as construct
 import Solution as sol
 import time
+import improver as imp
 
 inicio = time.time()
 
@@ -19,7 +20,11 @@ for plant in plants:
     solution = construct.construct_greedy_2(plant)
     print(f"construct_greedy_2 - Costo: {solution.cost}")
     print(solution.disposition)
+
+    solution = imp.improve_greedy(solution)
+    print(f"improve_greesy - Costo: {solution.cost}")
+    print(solution.disposition)
     print("")
 
 fin = time.time()
-print(f"Tiempo de ejecución: {fin - inicio}")
+print(f"Tiempo de ejecución: {fin - inicio} segundos")
