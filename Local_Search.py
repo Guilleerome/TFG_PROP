@@ -1,9 +1,16 @@
-import random
 import Solution as sol
+import numpy as np
+from itertools import combinations
 from copy import deepcopy
 
-import random
-import copy
+def copy_disposition(disposition):
+    return [row[:] for row in disposition]
+
+def swap_facilities(disposition, row, idx1, idx2):
+    disposition[row][idx1], disposition[row][idx2] = disposition[row][idx2], disposition[row][idx1]
+
+def create_solution(plant, disposition):
+    return sol.Solution(plant=plant, disposition=disposition)
 
 def first_move(solution):
     best_solution = solution
@@ -11,43 +18,45 @@ def first_move(solution):
 
     while improved:
         improved = False
-        new_solution = sol.Solution(plant=solution.plant, cost=float('inf'))
+        order_rows = np.random.permutation(len(solution.disposition))
 
-        # Generar el orden aleatorio para filas y movimientos
-        order_moves = []
-        order_rows = []
-
-        for i in range(len(solution.disposition)):
-            aux = solution.disposition[i][::]
-            random.shuffle(aux)
-            order_moves.append(aux)
-            order_rows.append(i)
-        random.shuffle(order_rows)
-
-        # Probar todos los movimientos posibles
         for i in order_rows:
-            for j in range(len(order_moves[i])):
-                for k in range(j + 1, len(order_moves[i])):
-                    # Crear una copia de la disposición actual
-                    disposition_aux = copy.deepcopy(solution.disposition)
+            for j, k in combinations(range(len(solution.disposition[i])), 2):
+                disposition_aux = copy_disposition(solution.disposition)
+                swap_facilities(disposition_aux, i, j, k)
 
-                    # Intercambiar las posiciones de las facilities
-                    disposition_aux[i][j], disposition_aux[i][k] = disposition_aux[i][k], disposition_aux[i][j]
-
-                    # Evaluar la nueva solución
-                    new_solution.changeDisposition(disposition_aux)
-                    if new_solution < best_solution:
-                        print(f"Nueva mejor solución encontrada. Costo: {new_solution.cost}")
-                        # Actualizar la mejor solución y reiniciar búsqueda
-                        best_solution = new_solution
-                        improved = True
-                        break  # Salir de los bucles internos para reiniciar desde el principio
-                if improved:
+                new_solution = create_solution(solution.plant, disposition_aux)
+                if new_solution < best_solution:
+                    print(f"Nueva mejor solución encontrada. Costo: {new_solution.cost}")
+                    best_solution = new_solution
+                    improved = True
                     break
             if improved:
                 break
 
     return best_solution
 
-    
-        
+def best_move(solution):
+    best_solution = solution
+    improved = True
+
+    while improved:
+        improved = False
+        current_best_solution = deepcopy(best_solution)
+
+        for i in range(len(solution.disposition)):
+            for j, k in combinations(range(len(solution.disposition[i])), 2):
+                disposition_aux = copy_disposition(best_solution.disposition)
+                swap_facilities(disposition_aux, i, j, k)
+
+                new_solution = create_solution(solution.plant, disposition_aux)
+                if new_solution < current_best_solution:
+                    print(f"Mejor solución temporal encontrada. Costo: {new_solution.cost}")
+                    current_best_solution = new_solution
+
+        if current_best_solution.cost < best_solution.cost:
+            print(f"Nueva mejor solución global. Costo: {current_best_solution.cost}")
+            best_solution = current_best_solution
+            improved = True
+
+    return best_solution

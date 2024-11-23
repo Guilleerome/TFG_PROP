@@ -35,9 +35,15 @@ for plant in plants:
     print(solution.disposition)
     print("")
 
-    solution = ls.first_move(solution)
-    print(solution.disposition)
-    print(f"local_serach - Cost: {solution.cost}")
+    solution1 = ls.first_move(solution)
+    print(solution1.disposition)
+    print(f"local_serach_FM - Cost: {solution1.cost}")
+    print("")
+
+    solution2 = ls.best_move(solution)
+    print(solution2.disposition)
+    print(f"local_search_BM - Cost: {solution2.cost}")
+    print("")
 
 fin = time.time()
 print(f"Tiempo de ejecución: {fin - inicio} segundos")
