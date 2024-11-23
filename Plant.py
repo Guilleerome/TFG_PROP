@@ -1,8 +1,9 @@
 class Plant:
-    def __init__(self, name, number, rows, facilities, matrix):
+    def __init__(self, name, number, rows, capacities, facilities, matrix):
         self.name = name
         self.number = number
         self.rows = rows
+        self.capacities = capacities
         self.facilities = facilities
         self.matrix = matrix
 

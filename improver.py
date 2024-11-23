@@ -49,7 +49,7 @@ def improve_greedy(solution):
         new_solution.changeDisposition(disposition_aux)
         if new_solution < best_solution:
             print(f"Costo: {new_solution.cost}")
-            best_solution = new_solution
+            best_solution = copy.deepcopy(new_solution)
 
         used_dispositions.append(disposition_aux)
 

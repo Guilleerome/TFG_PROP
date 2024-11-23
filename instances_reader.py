@@ -23,6 +23,7 @@ def read_instances():
                 n = int(f.readline().strip())
                 #capacity = n / rows
                 facilities = list(map(int, f.readline().strip().split()))
+                capacities = list(map(int, f.readline().strip().split()))
                 # Crear un diccionario con n entradas
                 # facilities = {i: valores[i] for i in range(n)}
 
@@ -37,7 +38,7 @@ def read_instances():
                         distances.append(fila)
                 instance_name = file.split('/')[1].split('.')[0]
                 distances = make_matrix_symmetric(distances)
-                plants.append(plant_module.Plant(instance_name, n, rows, facilities, distances))
+                plants.append(plant_module.Plant(instance_name, n, rows, capacities, facilities, distances))
     zip_file.close()
     return plants
 

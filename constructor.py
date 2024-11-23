@@ -30,17 +30,16 @@ def construct_random(plant):
 def construct_greedy(plant):
     rows = plant.rows
     n = plant.number
+    capacities = plant.capacities
     disposition = []
     disposition_aux = []
     capacity = n / rows
-    v = []
     values = deepcopy(plant.facilities)
-    rest = n % rows
 
-    for j in range(rows - rest):
-        disposition_aux.append({(i): values[i] for i in range(capacity.__floor__() * j, capacity.__floor__() * (j + 1))})
-    for j in range(rows - rest, rows):
-        disposition_aux.append({i: values[i] for i in range(n - capacity.__ceil__() * j, n - capacity.__ceil__() * (j - 1))})
+    index = 0
+    for j in range(rows):
+        disposition_aux.append({i: values[i] for i in range(index, index + capacities[j])})
+        index += capacities[j]
 
     for i in range(rows):
         facilities_sorted = sorted(disposition_aux[i].items(), key=lambda x: x[1], reverse=True)
@@ -76,21 +75,21 @@ def reorganize_list(lista):
     return new_list
 
     return resultado
+
 def construct_greedy_2(plant):
     rows = plant.rows
     n = plant.number
+    capacities = plant.capacities
     disposition = []
     disposition_aux = []
     capacity = n / rows
     values = deepcopy(plant.facilities)
     bestSolution = sol.Solution(cost=float('inf'))
 
-    rest = n % rows
-
-    for j in range(rows - rest):
-        disposition_aux.append({(i): values[i] for i in range(capacity.__floor__() * j, capacity.__floor__() * (j + 1))})
-    for j in range(rows - rest, rows):
-        disposition_aux.append({i: values[i] for i in range(n - capacity.__ceil__() * j, n - capacity.__ceil__() * (j - 1))})
+    index = 0
+    for j in range(rows):
+        disposition_aux.append({i: values[i] for i in range(index, index + capacities[j])})
+        index += capacities[j]
 
     for order in [False, True]:
         factor_length = 0.1
