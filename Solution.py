@@ -3,7 +3,14 @@ class Solution:
     def __init__(self, plant=None, disposition=None, cost=None):
         self.plant = plant
         self.disposition = disposition
-        self.cost = cost if cost is not None else self.evaluate_cost_D(plant, disposition)
+        self.cost = (
+            cost if cost is not None
+            else (
+                self.evaluate_cost_D(plant, disposition) if plant.rows <= 2
+                else self.evaluate_cost(plant, disposition)
+            ) if np.sum([np.sum(row) for row in disposition]) == plant.number
+            else self.evaluate_cost(plant, disposition)
+        )
 
     def __lt__(self, other):
         return self.cost < other.cost

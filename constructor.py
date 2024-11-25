@@ -118,3 +118,50 @@ def construct_greedy_2(plant):
             factor_length += 0.1
 
     return bestSolution
+
+
+def constructor_grasp(plant, alfa):
+
+    rows = plant.rows
+    disposition = [[] for _ in range(rows)]
+
+    order_rows = list(range(rows))
+    random.shuffle(order_rows)
+
+    index = 0
+    facilities_by_row = []
+    for capacitiy in plant.capacities:
+        facilities_by_row.append(list(range(index, index + capacitiy)))
+        index += capacitiy
+
+    for row in order_rows:
+        available_facilities = facilities_by_row[row]
+
+        for _ in range(plant.capacities[row]):
+            candidates_cost = []
+
+            for facility in available_facilities:
+                disposition_aux = copy_disposition(disposition)
+                disposition_aux[row].append(facility)
+
+                new_solution = sol.Solution(plant=plant, disposition=disposition_aux)
+                cost = new_solution.cost
+                candidates_cost.append((facility, cost))
+
+            candidates_cost.sort(key=lambda x:x[1])
+
+            min_cost = candidates_cost[0][1]
+            max_cost = candidates_cost[-1][1]
+            threshold = min_cost + alfa * (max_cost - min_cost)
+
+            rcl = [candidate for candidate in candidates_cost if candidate[1] <= threshold]
+
+            selected_facility = random.choice(rcl)[0]
+
+            disposition[row].append(selected_facility)
+            available_facilities.remove(selected_facility)
+
+    return sol.Solution(plant=plant, disposition=disposition)
+
+def copy_disposition(disposition):
+    return [row[:] for row in disposition]
