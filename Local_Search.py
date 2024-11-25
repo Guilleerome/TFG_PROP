@@ -12,7 +12,7 @@ def swap_facilities(disposition, row, idx1, idx2):
 def create_solution(plant, disposition):
     return sol.Solution(plant=plant, disposition=disposition)
 
-def first_move(solution):
+def first_move_swap(solution):
     best_solution = solution
     improved = True
 
@@ -27,7 +27,6 @@ def first_move(solution):
 
                 new_solution = create_solution(solution.plant, disposition_aux)
                 if new_solution < best_solution:
-                    print(f"Nueva mejor solución encontrada. Costo: {new_solution.cost}")
                     best_solution = new_solution
                     improved = True
                     break
@@ -36,7 +35,7 @@ def first_move(solution):
 
     return best_solution
 
-def best_move(solution):
+def best_move_swap(solution):
     best_solution = solution
     improved = True
 
@@ -51,11 +50,74 @@ def best_move(solution):
 
                 new_solution = create_solution(solution.plant, disposition_aux)
                 if new_solution < current_best_solution:
-                    print(f"Mejor solución temporal encontrada. Costo: {new_solution.cost}")
                     current_best_solution = new_solution
 
         if current_best_solution.cost < best_solution.cost:
-            print(f"Nueva mejor solución global. Costo: {current_best_solution.cost}")
+            best_solution = current_best_solution
+            improved = True
+
+    return best_solution
+
+
+def first_move(solution):
+    best_solution = solution
+    improved = True
+
+    while improved:
+        improved = False
+        order_rows = np.random.permutation(len(solution.disposition))
+
+        for i in order_rows:
+            row = solution.disposition[i][:]
+            for j in range(len(row)):
+                facility = row[j]
+                row_copy = row[:j] + row[j+1:]
+
+                for k in range(len(row_copy) + 1):
+                    new_row = row_copy[:k] + [facility] + row_copy[k:]
+
+                    disposition_aux = copy_disposition(solution.disposition)
+                    disposition_aux[i] = new_row
+
+                    new_solution = create_solution(solution.plant, disposition_aux)
+                    if new_solution < best_solution:
+                        best_solution = new_solution
+                        improved = True
+                        break
+                if improved:
+                    break
+            if improved:
+                break
+
+    return best_solution
+
+def best_move(solution):
+    best_solution = solution
+    improved = True
+
+    while improved:
+        improved = False
+        current_best_solution = best_solution
+        best_disposition = None
+
+        for i in range(len(solution.disposition)):
+            row = solution.disposition[i][:]
+            row_length = len(row)
+
+            for j in range(row_length):
+                facility = row[j]
+                row_copy = row[:j] + row[j+1:]
+
+                for k in range(row_length):
+                    new_row = row_copy[:k] + [facility] + row_copy[k:]
+                    disposition_aux = copy_disposition(solution.disposition)
+                    disposition_aux[i] = new_row
+
+                    new_solution = create_solution(solution.plant, disposition_aux)
+                    if new_solution < current_best_solution:
+                        current_best_solution = new_solution
+
+        if current_best_solution < best_solution:
             best_solution = current_best_solution
             improved = True
 
