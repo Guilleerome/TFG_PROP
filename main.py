@@ -5,45 +5,58 @@ import time
 import improver as imp
 import Local_Search as ls
 
-inicio = time.time()
+def iterative_local_search(plant, initial_solution):
 
-plants = ir.read_instances()
+    current_solution = initial_solution
+    improved = True
 
-for plant in plants:
-    print(f"Planta: {plant.name}")
+    while improved:
+        improved = False
 
-    solution = construct.construct_random(plant)
-    print(f"construct_random - Costo: {solution.cost}")
-    solution = imp.improve_greedy(solution)
-    print(f"improve_greedy - Costo: {solution.cost}")
-    print(solution.disposition)
-    print("")
+        fm_swap_solution = ls.first_move_swap(current_solution)
+        bm_swap_solution = ls.best_move_swap(current_solution)
+        fm_solution = ls.first_move(current_solution)
+        bm_solution = ls.best_move(current_solution)
 
-    solution = construct.construct_greedy(plant)
-    print(f"construct_greedy - Costo: {solution.cost}")
-    solution = imp.improve_greedy(solution)
-    print(f"improve_greedy - Costo: {solution.cost}")
-    print(solution.disposition)
-    print("")
+        best_local_solution = min([fm_swap_solution, bm_swap_solution, fm_solution, bm_solution], key=lambda s: s.cost)
 
-    solution = construct.construct_greedy_2(plant)
-    print(f"construct_greedy_2 - Costo: {solution.cost}")
-    print(solution.disposition)
+        if best_local_solution.cost < current_solution.cost:
+            print(f"Mejora encontrada. Costo: {best_local_solution.cost}")
+            current_solution = best_local_solution
+            improved = True
 
-    solution = imp.improve_greedy(solution)
-    print(f"improve_greedy - Costo: {solution.cost}")
-    print(solution.disposition)
-    print("")
+    return current_solution
 
-    solution1 = ls.first_move(solution)
-    print(solution1.disposition)
-    print(f"local_serach_FM - Cost: {solution1.cost}")
-    print("")
+def main():
+    inicio = time.time()
 
-    solution2 = ls.best_move(solution)
-    print(solution2.disposition)
-    print(f"local_search_BM - Cost: {solution2.cost}")
-    print("")
+    plants = ir.read_instances()
 
-fin = time.time()
-print(f"Tiempo de ejecución: {fin - inicio} segundos")
+    for plant in plants:
+        print(f"Planta: {plant.name}")
+
+        solutions = [
+            construct.construct_random(plant),
+            construct.construct_greedy(plant),
+            construct.construct_greedy_2(plant),
+            construct.constructor_grasp(plant, 0.5)
+        ]
+
+        solutions = [imp.improve_greedy(sol) for sol in solutions]
+
+        best_initial_solution = min(solutions, key=lambda s: s.cost)
+        print(f"Mejor solución inicial de constructores - Costo: {best_initial_solution.cost}")
+        print(best_initial_solution.disposition)
+
+        final_solution = iterative_local_search(plant, best_initial_solution)
+
+        print("Solución final tras búsqueda local:")
+        print(final_solution.disposition)
+        print(f"Coste final: {final_solution.cost}")
+        print("")
+
+    fin = time.time()
+    print(f"Tiempo de ejecución: {fin - inicio} segundos")
+
+if __name__ == "__main__":
+    main()
