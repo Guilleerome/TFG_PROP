@@ -12,6 +12,7 @@ class Solution:
             else self.evaluate_cost(plant, disposition)
         )
 
+
     def __lt__(self, other):
         return self.cost < other.cost
 

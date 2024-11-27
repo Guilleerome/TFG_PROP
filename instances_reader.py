@@ -1,17 +1,6 @@
 import zipfile
 import Plant as plant_module
 
-def make_matrix_symmetric(m):
-    n = len(m)
-    for i in range(n):
-        for j in range(i + 1, n):  # Solo completar la parte inferior
-            if j < len(m[i]):
-                m[j][i] = m[i][j]  # Hacer que sea simétrica
-            else:
-                # Si faltan columnas en las filas inferiores, las creamos
-                m[j].append(m[i][j])
-    return m
-
 zip_file = zipfile.ZipFile('instances/small.zip', 'r')
 rows = 2
 plants = []
@@ -42,7 +31,16 @@ def read_instances():
     zip_file.close()
     return plants
 
-
+def make_matrix_symmetric(m):
+    n = len(m)
+    for i in range(n):
+        for j in range(i + 1, n):  # Solo completar la parte inferior
+            if j < len(m[i]):
+                m[j][i] = m[i][j]  # Hacer que sea simétrica
+            else:
+                # Si faltan columnas en las filas inferiores, las creamos
+                m[j].append(m[i][j])
+    return m
 
 
 
