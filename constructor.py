@@ -167,51 +167,43 @@ def constructor_grasp_2(plant, alfa):
     import random
 
     rows = plant.rows
-    disposition = [[] for _ in range(rows)]  # Solución inicial vacía
+    disposition = [[] for _ in range(rows)]
 
-    # Crear listas de instalaciones por fila
     facilities_by_row = []
     index = 0
     for capacity in plant.capacities:
         facilities_by_row.append(list(range(index, index + capacity)))
         index += capacity
 
-    # Capacidades restantes por fila
     capacities_remaining = plant.capacities[:]
 
-    while any(capacities_remaining):  # Mientras queden instalaciones por asignar
+    while any(capacities_remaining):
         candidates_cost = []
 
-        # Para cada fila, probar todas las instalaciones disponibles en esa fila
         for row in range(rows):
-            if capacities_remaining[row] > 0:  # Solo considerar filas con capacidad restante
+            if capacities_remaining[row] > 0:
                 for facility in facilities_by_row[row]:
-                    if facility not in disposition[row]:  # Si la instalación aún no está asignada
+                    if facility not in disposition[row]:
                         disposition_aux = copy_disposition(disposition)
                         disposition_aux[row].append(facility)
 
                         new_solution = sol.Solution(plant=plant, disposition=disposition_aux)
                         cost = new_solution.cost
-                        candidates_cost.append((facility, row, cost))  # Guardar (instalación, fila, costo)
+                        candidates_cost.append((facility, row, cost))
 
-        # Ordenar candidatos por costo
         candidates_cost.sort(key=lambda x: x[2], reverse=True)
 
-        # Definir umbral de costos para la lista de candidatos restringida (RCL)
         min_cost = candidates_cost[0][2]
         max_cost = candidates_cost[-1][2]
         threshold = min_cost + alfa * (max_cost - min_cost)
 
-        # Crear la RCL
         rcl = [candidate for candidate in candidates_cost if candidate[2] <= threshold]
 
-        # Seleccionar un candidato al azar de la RCL
         selected_facility, selected_row, _ = random.choice(rcl)
 
-        # Asignar la instalación a la fila correspondiente
         disposition[selected_row].append(selected_facility)
         facilities_by_row[selected_row].remove(selected_facility)
-        capacities_remaining[selected_row] -= 1  # Reducir la capacidad restante de la fila
+        capacities_remaining[selected_row] -= 1
 
     return sol.Solution(plant=plant, disposition=disposition)
 

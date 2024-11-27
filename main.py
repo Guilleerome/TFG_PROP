@@ -6,65 +6,6 @@ import Local_Search as ls
 import xlsxwriter
 
 
-def run_experiments():
-    plants = ir.read_instances()
-    results = {}
-
-    for plant in plants:
-        print(f"Procesando planta: {plant.name}")
-
-        # Constructores deterministas
-        deterministic_solutions = [
-            construct.construct_random(plant),
-            construct.construct_greedy(plant),
-            construct.construct_greedy_2(plant)
-        ]
-
-        # GRASP con diferentes valores de alfa
-        grasp_alphas = [0, 0.25, 0.5, 0.75, 1]
-        grasp_solutions = []
-
-        for alpha in grasp_alphas:
-            for _ in range(50):
-                grasp_solution = construct.constructor_grasp(plant, alpha)
-                grasp_solutions.append((alpha, grasp_solution))  # Guardar alfa junto con la solución
-
-        # Calcular medias de GRASP
-        grasp_avg_costs = {}
-        for alpha in grasp_alphas:
-            # Filtrar soluciones por alfa y calcular promedio
-            solutions = [solution.cost for a, solution in grasp_solutions if a == alpha]
-            grasp_avg_costs[alpha] = sum(solutions) / len(solutions)
-
-        # Seleccionar mejor solución inicial
-        all_solutions = deterministic_solutions + [solution for _, solution in grasp_solutions]
-        best_initial_solution = min(all_solutions, key=lambda s: s.cost)
-        print(f"Mejor solución inicial: {best_initial_solution.cost}")
-
-        # Ejecutar búsquedas locales por separado
-        local_search_results = {
-            "first_move_swap": ls.first_move_swap(best_initial_solution),
-            "best_move_swap": ls.best_move_swap(best_initial_solution),
-            "first_move": ls.first_move(best_initial_solution),
-            "best_move": ls.best_move(best_initial_solution)
-        }
-
-        # Iterative Local Search
-        final_best_solution = iterative_local_search(plant, best_initial_solution)
-
-        # Registrar resultados en un diccionario
-        results[plant.name] = {
-            "constructors": {
-                "deterministic": [sol.cost for sol in deterministic_solutions],
-                "grasp": grasp_avg_costs
-            },
-            "best_initial": best_initial_solution.cost,
-            "local_search": {key: sol.cost for key, sol in local_search_results.items()},
-            "final_best": final_best_solution.cost
-        }
-
-    return plants, results
-
 def iterative_local_search(plant, initial_solution):
 
     current_solution = initial_solution
@@ -81,15 +22,95 @@ def iterative_local_search(plant, initial_solution):
         best_local_solution = min([fm_swap_solution, bm_swap_solution, fm_solution, bm_solution], key=lambda s: s.cost)
 
         if best_local_solution.cost < current_solution.cost:
-            print(f"Mejora encontrada. Costo: {best_local_solution.cost}")
             current_solution = best_local_solution
             improved = True
 
     return current_solution
 
+
+def run_experiments():
+    plants = ir.read_instances()
+    results = {}
+
+    for plant in plants:
+        print(f"Procesando planta: {plant.name}")
+
+        # Registrar tiempos
+        times = {"deterministic": [], "grasp": [], "best_initial_solution" : 0, "local_search": {}, "iterative": 0}
+
+        # Constructores deterministas con tiempos
+        deterministic_solutions = []
+        for constructor in [construct.construct_random, construct.construct_greedy, construct.construct_greedy_2]:
+            start_time = time.time()
+            solution = constructor(plant)
+            times["deterministic"].append(time.time() - start_time)
+            deterministic_solutions.append(solution)
+
+        # GRASP con diferentes valores de alfa y tiempos
+        grasp_alphas = [0, 0.25, 0.5, 0.75, 1]
+        grasp_solutions = []
+        grasp_times = []
+
+        for alpha in grasp_alphas:
+            start_time = time.time()
+            for _ in range(50):
+                grasp_solution = construct.constructor_grasp(plant, alpha)
+                grasp_solutions.append((alpha, grasp_solution))
+            grasp_times.append((time.time() - start_time) / 50)  # Promedio por iteración
+
+        times["grasp"] = grasp_times
+
+        # Calcular medias de GRASP
+        grasp_avg_costs = {}
+        for alpha in grasp_alphas:
+            solutions = [solution.cost for a, solution in grasp_solutions if a == alpha]
+            grasp_avg_costs[alpha] = sum(solutions) / len(solutions)
+
+        # Seleccionar mejor solución inicial
+        start_time = time.time()
+        all_solutions = deterministic_solutions + [solution for _, solution in grasp_solutions]
+        best_initial_solution = min(all_solutions, key=lambda s: s.cost)
+        end_time = time.time()
+        times["best_initial_solution"] = start_time - end_time
+
+        # Ejecutar búsquedas locales por separado con tiempos
+        local_search_results = {}
+        local_search_methods = {
+            "first_move_swap": ls.first_move_swap,
+            "best_move_swap": ls.best_move_swap,
+            "first_move": ls.first_move,
+            "best_move": ls.best_move
+        }
+
+        for key, method in local_search_methods.items():
+            start_time = time.time()
+            result = method(best_initial_solution)
+            local_search_results[key] = result.cost
+            times["local_search"][key] = time.time() - start_time
+
+        # Iterative Local Search con tiempo
+        start_time = time.time()
+        final_best_solution = iterative_local_search(plant, best_initial_solution)
+        times["iterative"] = time.time() - start_time
+
+        # Registrar resultados en un diccionario
+        results[plant.name] = {
+            "constructors": {
+                "deterministic": [sol.cost for sol in deterministic_solutions],
+                "grasp": grasp_avg_costs
+            },
+            "best_initial": best_initial_solution.cost,
+            "local_search": local_search_results,
+            "final_best": final_best_solution.cost,
+            "times": times
+        }
+
+    return plants, results
+
+
 def write_results_to_excel(plants, results):
     # Crear el archivo Excel
-    workbook = xlsxwriter.Workbook("experiment_results.xlsx", {'in_memory':True})
+    workbook = xlsxwriter.Workbook("experiment_results.xlsx", {"in_memory": True})
     worksheet = workbook.add_worksheet("Resultados")
 
     # Formatos
@@ -143,7 +164,45 @@ def write_results_to_excel(plants, results):
         worksheet.write(row_idx, 0, plant_name, cell_format)  # Nombre de la planta
         worksheet.write_row(row_idx, 1, processed_results, cell_format)  # Resultados
 
+    # Fila adicional para tiempos medios
+    times_row = len(results) + 2
+    worksheet.write(times_row, 0, "Tiempos Medios", header_format)
+
+    avg_times = []
+
+    # Promedios de tiempos para constructores deterministas
+    for i in range(3):  # Tres constructores deterministas
+        avg_times.append(
+            sum(result["times"]["deterministic"][i] for _, result in results.items()) / len(results)
+        )
+
+    # Promedios de tiempos para GRASP (5 configuraciones de alfa)
+    for i in range(5):
+        avg_times.append(
+            sum(result["times"]["grasp"][i] for _, result in results.items()) / len(results)
+        )
+
+    avg_times.append(
+        sum(result["times"]["best_initial_solution"] for _, result in results.items()) / len(results)
+    )
+
+    # Tiempo promedio de búsqueda local
+    for key in ["first_move_swap", "best_move_swap", "first_move", "best_move"]:
+        avg_times.append(
+            sum(result["times"]["local_search"][key] for _, result in results.items()) / len(results)
+        )
+
+    # Tiempo promedio para Iterative Local Search
+    avg_times.append(
+        sum(result["times"]["iterative"] for _, result in results.items()) / len(results)
+    )
+
+    # Escribir tiempos en las columnas correspondientes
+    worksheet.write_row(times_row, 1, avg_times, cell_format)
+
     workbook.close()
+
+
 
 def main():
     inicio = time.time()
@@ -154,6 +213,7 @@ def main():
     write_results_to_excel(plants, results)
     fin = time.time()
     print(f"Tiempo total de ejecución: {fin - inicio} segundos")
+
 
 if __name__ == "__main__":
     main()
