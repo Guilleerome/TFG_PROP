@@ -163,6 +163,42 @@ def constructor_grasp(plant, alfa):
 
     return sol.Solution(plant=plant, disposition=disposition)
 
+def constructor_random_greedy(plant, alfa):
+    rows = plant.rows
+    disposition = [[] for _ in range(rows)]
+
+    index = 0
+    facilities_by_row = []
+    for capacitiy in plant.capacities:
+        facilities_by_row.append(list(range(index, index + capacitiy)))
+        index += capacitiy
+
+    for row in random.sample(range(rows), rows):
+        while len(facilities_by_row[row]) != 0:
+
+            available_facilities = select_random_candidates(facilities_by_row[row], alfa)
+
+            candidates_cost = []
+
+            for facility in available_facilities:
+                disposition_aux = copy_disposition(disposition)
+                disposition_aux[row].append(facility)
+
+                new_solution = sol.Solution(plant=plant, disposition=disposition_aux)
+                cost = new_solution.cost
+                candidates_cost.append((facility, cost))
+
+            selected_candidate = min(candidates_cost, key=lambda x: x[1])
+
+            disposition[row].append(selected_candidate[0])
+            facilities_by_row[row].remove(selected_candidate[0])
+
+    return sol.Solution(plant=plant, disposition=disposition)
+
+def select_random_candidates(row_facilities, alfa):
+    candidates = (alfa * len(row_facilities)).__ceil__()
+    return random.sample(row_facilities, min(candidates, len(row_facilities)))
+
 def constructor_grasp_2(plant, alfa):
     import random
 
