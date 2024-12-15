@@ -138,15 +138,7 @@ def constructor_grasp(plant, alfa):
         available_facilities = facilities_by_row[row]
 
         for _ in range(plant.capacities[row]):
-            candidates_cost = []
-
-            for facility in available_facilities:
-                disposition_aux = copy_disposition(disposition)
-                disposition_aux[row].append(facility)
-
-                new_solution = sol.Solution(plant=plant, disposition=disposition_aux)
-                cost = new_solution.cost
-                candidates_cost.append((facility, cost))
+            candidates_cost = evaluate_candidates(plant, disposition, row, available_facilities)
 
             candidates_cost.sort(key=lambda x:x[1])
 
@@ -177,23 +169,22 @@ def constructor_random_greedy(plant, alfa):
         while len(facilities_by_row[row]) != 0:
 
             available_facilities = select_random_candidates(facilities_by_row[row], alfa)
-
-            candidates_cost = []
-
-            for facility in available_facilities:
-                disposition_aux = copy_disposition(disposition)
-                disposition_aux[row].append(facility)
-
-                new_solution = sol.Solution(plant=plant, disposition=disposition_aux)
-                cost = new_solution.cost
-                candidates_cost.append((facility, cost))
-
+            candidates_cost = evaluate_candidates(plant, disposition, row, available_facilities)
             selected_candidate = min(candidates_cost, key=lambda x: x[1])
 
             disposition[row].append(selected_candidate[0])
             facilities_by_row[row].remove(selected_candidate[0])
 
     return sol.Solution(plant=plant, disposition=disposition)
+
+def evaluate_candidates(plant, disposition, row, facilities):
+    candidates_cost = []
+    for facility in facilities:
+        disposition_aux = copy_disposition(disposition)
+        disposition_aux[row].append(facility)
+        cost = sol.Solution(plant=plant, disposition=disposition_aux).cost
+        candidates_cost.append((facility, cost))
+    return candidates_cost
 
 def select_random_candidates(row_facilities, alfa):
     candidates = (alfa * len(row_facilities)).__ceil__()
