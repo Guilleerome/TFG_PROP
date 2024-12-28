@@ -91,24 +91,28 @@ def aggregate_statistics_across_instances(results, key):
                             aggregated[alpha_name] = {
                                 "costs": [],
                                 "times": [],
-                                "num_bests": 0
+                                "num_bests": 0,
+                                "std_devs": []
                             }
 
                         aggregated[alpha_name]["costs"].append(avg_cost)
                         aggregated[alpha_name]["times"].append(avg_time)
                         aggregated[alpha_name]["num_bests"] += num_best
+                        aggregated[alpha_name]["std_devs"].append(std_dev)
                 else:
                     # Procesar otros métodos
                     if method_name not in aggregated:
                         aggregated[method_name] = {
                             "costs": [],
                             "times": [],
-                            "num_bests": 0
+                            "num_bests": 0,
+                            "std_devs": []
                         }
 
                     aggregated[method_name]["costs"].append(method_data.get("average", 0))
                     aggregated[method_name]["times"].append(method_data.get("time", 0))
                     aggregated[method_name]["num_bests"] += method_data.get("num_bests", 0)
+                    aggregated[method_name]["std_devs"].append(method_data.get("std_devs", 0))
 
         elif key == "local_search":
             # Procesar búsquedas locales (individual y extended)
@@ -203,48 +207,96 @@ def run_experiments():
 
         best_cost = min(all_solution_costs)  # Mejor costo global
 
-        grasp_avg_costs, grasp_std_devs, grasp_num_bests = {}, {}, {}
-        random_greedy_avg_costs, random_greedy_std_devs, random_greedy_num_bests = {}, {}, {}
+        def calculate_std_dev(solutions):
+            std_devs = [solution / best_cost for solution in solutions]
+            mean_std_devs = np.mean(std_devs)
+            return mean_std_devs
 
         # Guillermo estadísticas
         guillermo_avg_cost = guillermo_solution.cost
-        guillermo_std_dev = 0
+        guillermo_std_dev = calculate_std_dev([guillermo_solution.cost])
         guillermo_num_bests = 1 if guillermo_solution.cost == best_cost else 0
 
+        grasp_avg_costs, grasp_std_devs, grasp_num_bests = {}, {}, {}
         # GRASP estadísticas
         for alpha in alphas:
             solutions = [solution.cost for a, solution in grasp_solutions if a == alpha]
             grasp_avg_costs[alpha] = np.mean(solutions)
-            grasp_std_devs[alpha] = np.std(solutions)
+            grasp_std_devs[alpha] = calculate_std_dev(solutions)
             grasp_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
 
+        random_greedy_avg_costs, random_greedy_std_devs, random_greedy_num_bests = {}, {}, {}
         # Random Greedy estadísticas
         for alpha in alphas:
             solutions = [solution.cost for a, solution in random_greedy_solutions if a == alpha]
             random_greedy_avg_costs[alpha] = np.mean(solutions)
-            random_greedy_std_devs[alpha] = np.std(solutions)
+            random_greedy_std_devs[alpha] = calculate_std_dev(solutions)
             random_greedy_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
 
         # Random estadísticas
         random_costs = [solution.cost for solution in random_solutions]
         random_avg_cost = np.mean(random_costs)
-        random_std_dev = np.std(random_costs)
+        random_std_dev = calculate_std_dev(random_costs)
         random_num_bests = sum(1 for cost in random_costs if cost == best_cost)
 
         # Seleccionar mejor solución inicial
         start_time = time.time()
-        all_solutions =  [solution for _, solution in grasp_solutions] + [solution for _, solution in random_greedy_solutions] + random_solutions
-        best_solutions = sorted(all_solutions, key=lambda s: s.cost)[:2]
-        if guillermo_solution in best_solutions:
-            best_solutions = sorted(all_solutions, key=lambda s: s.cost)[:3]
-        else:
-            best_solutions.append(guillermo_solution)
+
+        # Crear una lista extendida con información de origen para cada solución
+        all_solutions = (
+                [(solution, f"GRASP") for _, solution in grasp_solutions] +
+                [(solution, f"Random Greedy") for _, solution in random_greedy_solutions] +
+                [(solution, f"Random") for solution in random_solutions]
+        )
+        all_solutions.append((guillermo_solution, "Guillermo"))
+        # Ordenar las soluciones por costo
+        all_solutions_sorted = sorted(all_solutions, key=lambda s: s[0].cost)
+
+        # Seleccionar las mejores soluciones, incluyendo empates
+        best_solutions = []
+        ordinal_map = ["1º", "2º", "3º"]  # Mapear posiciones ordinales
+        current_rank = 0
+
+        for solution, origin in all_solutions_sorted:
+            if not best_solutions or solution.cost == best_solutions[-1][0].cost:
+                # Si la lista está vacía o el costo es igual al último agregado
+                if len(best_solutions) < len(ordinal_map):
+                    best_solutions.append((solution, origin, ordinal_map[current_rank]))
+            else:
+                # Si el costo es diferente, avanzar al siguiente ordinal
+                if current_rank < len(ordinal_map) - 1:
+                    current_rank += 1
+                    best_solutions.append((solution, origin, ordinal_map[current_rank]))
+            # Si hemos llenado todas las posiciones posibles, detener
+            if len(best_solutions) == len(ordinal_map):
+                break
+
+        # Verificar si `guillermo_solution` está entre las mejores
+        guillermo_in_best = any(sol == guillermo_solution for sol, _, _ in best_solutions)
+        if not guillermo_in_best:
+            # Identificar el ordinal de la última posición en ordinal_map
+            last_position = ordinal_map[-1]
+
+            # Remover cualquier solución que esté actualmente en esa última posición
+            best_solutions = [
+                (sol, orig, rank)
+                for sol, orig, rank in best_solutions
+                if rank != last_position
+            ]
+            best_solutions.append((guillermo_solution, "Guillermo", ordinal_map[current_rank]))
+
+        # Crear nombres con la posición correspondiente
+        best_solutions_named = {
+            f"{origin} ({position})": solution for solution, origin, position in best_solutions
+        }
+
         end_time = time.time()
-        times["best_initial_solution"] = start_time - end_time
+        times["best_initial_solution"] = end_time - start_time
 
         # Ejecutar búsquedas locales por separado sobre las mejores soluciones
         local_search_results = {}
         extended_local_search_results = {}
+
         local_search_methods = {
             "first_move_swap": ls.first_move_swap,
             "best_move_swap": ls.best_move_swap,
@@ -253,33 +305,37 @@ def run_experiments():
         }
 
         # Ejecutar búsquedas locales individuales sobre cada solución en las mejores soluciones
-        for idx, solution in enumerate(best_solutions):
-            local_search_results[f"solution_{idx + 1}"] = {}
+        for name, solution in best_solutions_named.items():
+            local_search_results[name] = {}
             for key, method in local_search_methods.items():
                 start_time = time.time()
                 result = method(solution)
-                local_search_results[f"solution_{idx + 1}"][key] = {
+                local_search_results[name][key] = {
                     "cost": result.cost,
                     "time": time.time() - start_time
                 }
 
+        # Ejecutar combinaciones de búsquedas locales
         valid_combinations = [
             ("first_move", "first_move_swap"),
             ("first_move", "best_move_swap"),
             ("best_move", "first_move_swap"),
-            ("best_move", "best_move_swap")
+            ("best_move", "best_move_swap"),
+            ("first_move_swap", "first_move"),
+            ("first_move_swap", "best_move"),
+            ("best_move_swap", "first_move"),
+            ("best_move_swap", "best_move")
         ]
 
-        for idx, solution in enumerate(best_solutions):
-            extended_local_search_results[f"solution_{idx + 1}"] = {}
+        for name, solution in best_solutions_named.items():
+            extended_local_search_results[name] = {}
             for combo in valid_combinations:
                 start_time = time.time()
 
                 intermediate_result = local_search_methods[combo[0]](solution)
-
                 final_result = local_search_methods[combo[1]](intermediate_result)
 
-                extended_local_search_results[f"solution_{idx + 1}"][" -> ".join(combo)] = {
+                extended_local_search_results[name][" -> ".join(combo)] = {
                     "cost": final_result.cost,
                     "time": time.time() - start_time
                 }
@@ -309,7 +365,7 @@ def run_experiments():
                 "random": {
                     "best": min([solution for solution in random_solutions]),
                     "average": random_avg_cost,  # Coste promedio
-                    "std_dev": random_std_dev,  # Desviación estándar
+                    "std_devs": random_std_dev,  # Desviación estándar
                     "num_bests": random_num_bests,  # Veces que Random encuentra la mejor solución
                     "time": times["random"]  # Tiempo promedio
                 },
@@ -323,7 +379,7 @@ def run_experiments():
                 }
             },
             "best_initial": {
-                "solutions": [sol.cost for sol in best_solutions],  # Costes de las mejores soluciones iniciales
+                "solutions": [sol.cost for sol, _, _ in best_solutions],  # Costes de las mejores soluciones iniciales
                 "time": times["best_initial_solution"]  # Tiempo para determinar las mejores soluciones iniciales
             },
             "local_search": {
@@ -351,10 +407,10 @@ def write_results_to_excel(plants, results):
     # Tabla 1: Resultados generales por planta
     worksheet_general = workbook.add_worksheet("Resultados Generales")
     headers_general = [
-        "Planta", "Constructor Guillermo (Costo)",
-        "Constructor Random (Promedio)",
-        "Constructor Random Greedy (α=0.25)", "Constructor Random Greedy (α=0.5)",
-        "Constructor Random Greedy (α=0.75)", "Constructor Random Greedy (α=1.0)",
+        "Planta", "Constructivo Guillermo (coste)",
+        "Constructivo Random (Promedio)",
+        "Constructivo Random Greedy (α=0.25)", "Constructivo Random Greedy (α=0.5)",
+        "Constructivo Random Greedy (α=0.75)", "Constructivo Random Greedy (α=1.0)",
         "GRASP (α=0.25)", "GRASP (α=0.5)", "GRASP (α=0.75)", "GRASP (α=1.0)",
         "Mejores Soluciones Iniciales"
     ]
@@ -379,34 +435,53 @@ def write_results_to_excel(plants, results):
         worksheet_general.write_row(row_idx, 0, general_data, cell_format)
 
     # Tabla 2: Best constructors
-    worksheet = workbook.add_worksheet("Best constructor")
+    worksheet = workbook.add_worksheet("Best constructivo")
     constructores = ["guillermo", "random", "random_greedy", "grasp"]
     headers = ["Instancia"] + constructores + ["Best"]
+
+    # Formatos
+    cell_format = workbook.add_format({"border": 1, "align": "center"})
+    highlight_format = workbook.add_format({"border": 1, "bold": True, "bg_color": "#FFD700", "align": "center"})  # Negrita y color de fondo dorado
+
     worksheet.write_row(0, 0, headers, header_format)
-    worksheet.set_column(0, len(headers) - 1, default_column_width)
+    worksheet.set_column(0, len(headers) - 1, 15)  # Ajusta ancho de columnas
 
     best_count = {constructor: 0 for constructor in constructores}
 
     row = 1
     for instancia, data in results.items():
+        # Extraer los valores "best" por constructor
         best_solutions = {constructor: data["constructors"][constructor]["best"] for constructor in constructores}
         best_value = min(best_solutions.values())
 
+        # Contabilizar el número de mejores valores
         for constructor, valor in best_solutions.items():
-            if valor == best_value:
+            if valor.cost == best_value.cost:
                 best_count[constructor] += 1
 
+        # Preparar fila con valores
         fila = [instancia] + [best_solutions[constructor].cost for constructor in constructores] + [best_value.cost]
-        worksheet.write_row(row, 0, fila, cell_format)
+
+        # Escribir la fila y resaltar los valores mínimos
+        for col, value in enumerate(fila):
+            if col > 0 and col <= len(constructores):  # Solo para columnas de constructores
+                if value == best_value.cost:
+                    worksheet.write(row, col, value, highlight_format)
+                else:
+                    worksheet.write(row, col, value, cell_format)
+            else:
+                worksheet.write(row, col, value, cell_format)
+
         row += 1
 
+    # Escribir resumen
     worksheet.write(row, 0, "Resumen", bold_format)
     for col, constructor in enumerate(constructores, start=1):
         worksheet.write(row, col, best_count[constructor], cell_format)
 
     # Tabla 3: Resultados de búsquedas locales
     worksheet_local_search = workbook.add_worksheet("Búsquedas Locales")
-    headers_local = ["Planta", "Soluciones", "Método", "Costo", "Tiempo"]
+    headers_local = ["Planta", "Soluciones", "Método", "coste", "Tiempo"]
     worksheet_local_search.write_row(0, 0, headers_local, header_format)
     worksheet_local_search.set_column(0, len(headers_local) - 1, default_column_width)
 
@@ -426,7 +501,7 @@ def write_results_to_excel(plants, results):
 
     # Tabla 4: Mejores resultados de búsquedas locales
     worksheet_best_local = workbook.add_worksheet("Best Local Search")
-    headers_best_local = ["Planta", "Mejores Soluciones", "Métodos Locales", "Costo"]
+    headers_best_local = ["Planta", "Mejores Soluciones", "Métodos Locales", "coste"]
     worksheet_best_local.write_row(0, 0, headers_best_local, header_format)
     worksheet_best_local.set_column(0, len(headers_best_local) - 1, default_column_width)
 
@@ -436,6 +511,8 @@ def write_results_to_excel(plants, results):
 
     row = 1
     for plant_name, plant_results in results.items():
+        initial_cost = plant_results["best_initial"]["solutions"][0] # Costo de la solución inicial
+
         best_cost = float('inf')
         best_solutions = []
         best_methods = []
@@ -451,29 +528,47 @@ def write_results_to_excel(plants, results):
                     best_solutions.append(solution_id)
                     best_methods.append(method)
 
-        worksheet_best_local.write_row(
-            row, 0, [plant_name, ", ".join(best_solutions), ", ".join(best_methods), best_cost]
-        )
-
-        for method in best_methods:
-            best_count_local[method] += 1
-
-        for solution in best_solutions:
-            if solution in best_solution_count:
-                best_solution_count[solution] += 1
-            else:
-                best_solution_count[solution] = 1
+        # Si ninguna búsqueda local mejora la solución inicial
+        if best_cost >= initial_cost:
+            best_constructor , _ = next(iter(plant_results["local_search"]["individual"].items()))
+            worksheet_best_local.write_row(
+                row,
+                0,
+                [plant_name, best_constructor, "Ninguna búsqueda mejora la solución", initial_cost],
+                cell_format,
+            )
+        else:
+            worksheet_best_local.write_row(
+                row,
+                0,
+                [plant_name, ", ".join(best_solutions), ", ".join(best_methods), best_cost],
+                cell_format,
+            )
+            for method in best_methods:
+                best_count_local[method] += 1
+            for solution in best_solutions:
+                best_solution_count[solution] = best_solution_count.get(solution, 0) + 1
 
         row += 1
 
-    # Resumen de mejores métodos
     row += 2
     worksheet_best_local.write(row, 0, "Resumen Métodos", bold_format)
     row += 1
-    worksheet_best_local.write_row(row, 0, ["Método", "Veces mejor"], header_format)
+    worksheet_best_local.write_row(row, 0, ["Método", "Veces mejor", "Tiempos Medios"], header_format)
     row += 1
+
+    # Diccionario para acumular tiempos
+    method_times = {method: 0 for method in local_methods}
+
+    for plant_name, plant_results in results.items():
+        for solution_id, search_results in plant_results["local_search"]["individual"].items():
+            for method, metrics in search_results.items():
+                if metrics.get("cost", float('inf')) == best_cost:
+                    method_times[method] += metrics.get("time", 0)
+
     for method, count in best_count_local.items():
-        worksheet_best_local.write_row(row, 0, [method, count], cell_format)
+        avg_time = method_times[method] / count if count > 0 else 0
+        worksheet_best_local.write_row(row, 0, [method, count, avg_time], cell_format)
         row += 1
 
     # Resumen de mejores soluciones
@@ -488,7 +583,7 @@ def write_results_to_excel(plants, results):
 
     # Tabla 5: Resultados de búsquedas locales extendidas
     worksheet_extended_search = workbook.add_worksheet("Búsquedas Extendidas")
-    headers_extended = ["Planta", "Solución", "Combinación", "Costo", "Tiempo"]
+    headers_extended = ["Planta", "Solución", "Combinación", "coste", "Tiempo"]
     worksheet_extended_search.write_row(0, 0, headers_extended, header_format)
     worksheet_extended_search.set_column(0, len(headers_extended) - 1, default_column_width)
 
@@ -508,15 +603,17 @@ def write_results_to_excel(plants, results):
 
     # Tabla 6: Mejores resultados de búsquedas extendidas
     worksheet_best_extended = workbook.add_worksheet("Best Extended Search")
-    headers_best_extended = ["Planta", "Mejores Soluciones", "Combinaciones", "Costo"]
+    headers_best_extended = ["Planta", "Mejores Soluciones", "Combinaciones", "coste"]
     worksheet_best_extended.write_row(0, 0, headers_best_extended, header_format)
     worksheet_best_extended.set_column(0, len(headers_best_extended) - 1, default_column_width)
 
     best_count_extended = {}
     best_solution_usage_count = {}
+    extended_method_times = {combination: 0 for combination in best_count_extended}  # Diccionario para acumular tiempos
     row = 1
 
     for plant_name, plant_results in results.items():
+        initial_cost = plant_results["best_initial"]["solutions"][0]  # Costo de la solución inicial
         best_cost = float('inf')
         best_solutions = []
         best_combinations = []
@@ -532,34 +629,57 @@ def write_results_to_excel(plants, results):
                     best_solutions.append(solution_id)
                     best_combinations.append(combination)
 
-        worksheet_best_extended.write_row(
-            row, 0, [plant_name, ", ".join(best_solutions), ", ".join(best_combinations), best_cost]
-        )
+        # Acumular tiempos solo para las combinaciones que resultaron mejores
+        for solution_id, extended_search_results in plant_results["local_search"]["extended"].items():
+            for combination, metrics in extended_search_results.items():
+                if metrics.get("cost", float('inf')) == best_cost:  # Combinación que coincide con el mejor costo
+                    if combination not in extended_method_times:
+                        extended_method_times[combination] = metrics.get("time", 0)
+                    else:
+                        extended_method_times[combination] += metrics.get("time", 0)
 
-        for combination in best_combinations:
-            best_count_extended[combination] = best_count_extended.get(combination, 0) + 1
-
-        for solution in best_solutions:
-            best_solution_usage_count[solution] = best_solution_usage_count.get(solution, 0) + 1
+        # Si ninguna búsqueda extendida mejora la solución inicial
+        if best_cost >= initial_cost:
+            best_constructor, _ = next(iter(plant_results["local_search"]["individual"].items()))
+            worksheet_best_extended.write_row(
+                row,
+                0,
+                [plant_name, best_constructor, "Ninguna búsqueda mejora la solución", initial_cost],
+                cell_format,
+            )
+        else:
+            worksheet_best_extended.write_row(
+                row,
+                0,
+                [plant_name, ", ".join(best_solutions), ", ".join(best_combinations), best_cost],
+                cell_format,
+            )
+            for combination in best_combinations:
+                best_count_extended[combination] = best_count_extended.get(combination, 0) + 1
+            for solution in best_solutions:
+                best_solution_usage_count[solution] = best_solution_usage_count.get(solution, 0) + 1
 
         row += 1
 
-    # Resumen de mejores combinaciones
+    # Resumen de combinaciones con tiempos medios
     row += 2
     worksheet_best_extended.write(row, 0, "Resumen Combinaciones", bold_format)
     row += 1
-    worksheet_best_extended.write_row(row, 0, ["Combinación", "Veces mejor"], header_format)
+    worksheet_best_extended.write_row(row, 0, ["Combinación", "Veces mejor", "Tiempos Medios"], header_format)
     row += 1
+
     for combination, count in best_count_extended.items():
-        worksheet_best_extended.write_row(row, 0, [combination, count], cell_format)
+        avg_time = extended_method_times[combination] / count if count > 0 else 0
+        worksheet_best_extended.write_row(row, 0, [combination, count, avg_time], cell_format)
         row += 1
 
-    # Resumen de mejores soluciones
+    # Resumen de mejores soluciones extendidas
     row += 2
     worksheet_best_extended.write(row, 0, "Resumen Soluciones", bold_format)
     row += 1
-    worksheet_best_extended.write_row(row, 0, ["Solución", "Veces utilizada para la mejor"], header_format)
+    worksheet_best_extended.write_row(row, 0, ["Solución", "Veces mejor"], header_format)
     row += 1
+
     for solution, count in best_solution_usage_count.items():
         worksheet_best_extended.write_row(row, 0, [solution, count], cell_format)
         row += 1
@@ -578,7 +698,7 @@ def write_results_to_excel(plants, results):
         avg_cost, avg_time, std_dev, total_bests = calculate_overall_statistics([method_data])
         worksheet_summary.write_row(
             row_idx, 0,
-            [f"Constructor - {method_name}", avg_cost, avg_time, std_dev, total_bests],
+            [f"Constructivo - {method_name}", avg_cost, avg_time, std_dev, total_bests],
             cell_format
         )
         row_idx += 1
@@ -606,7 +726,6 @@ def write_results_to_excel(plants, results):
     #     row_idx += 1
 
     workbook.close()
-
 
 def main():
     inicio = time.time()
