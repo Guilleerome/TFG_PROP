@@ -1,5 +1,5 @@
 import zipfile
-import Plant as plant_module
+import plant as plant_module
 
 zip_file = zipfile.ZipFile('instances/small.zip', 'r')
 rows = 2

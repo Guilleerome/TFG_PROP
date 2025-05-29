@@ -1,6 +1,6 @@
 import instances_reader as ir
 from collections import deque
-import Solution as sol
+import solution as sol
 from copy import deepcopy
 
 import random

@@ -1,4 +1,4 @@
-import Solution as sol
+import solution as sol
 import numpy as np
 from itertools import combinations
 from copy import deepcopy
@@ -122,3 +122,24 @@ def best_move(solution):
             improved = True
 
     return best_solution
+
+def iterative_local_search(plant, initial_solution):
+
+    current_solution = initial_solution
+    improved = True
+
+    while improved:
+        improved = False
+
+        fm_swap_solution = first_move_swap(current_solution)
+        bm_swap_solution = best_move_swap(current_solution)
+        fm_solution = first_move(current_solution)
+        bm_solution = best_move(current_solution)
+
+        best_local_solution = min([fm_swap_solution, bm_swap_solution, fm_solution, bm_solution], key=lambda s: s.cost)
+
+        if best_local_solution.cost < current_solution.cost:
+            current_solution = best_local_solution
+            improved = True
+
+    return current_solution
