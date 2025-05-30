@@ -33,7 +33,7 @@ def read_instances(folder_name: str):
                     fila = list(map(int, linea_matriz.strip().split()))
                     distances.append(fila)
             instance_name = file_path.stem
-            distances = make_matrix_symmetric(distances)
+            # distances = make_matrix_symmetric(distances)
             plants.append(plant_module.Plant(instance_name, n, len(capacities), capacities, facilities, distances))
     return plants
 
