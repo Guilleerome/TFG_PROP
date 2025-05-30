@@ -2,7 +2,6 @@ import instances_reader as ir
 from collections import deque
 import solution as sol
 from copy import deepcopy
-
 import random
 
 
@@ -46,13 +45,6 @@ def construct_greedy(plant):
         facilities_sorted = [x[0] for x in facilities_sorted]
         disposition.append(facilities_sorted)
 
-    #idea, when creating the disposition, put in the middle the facilities with the highest values, taking into account the amount of space multiplied by the sum of the distances
-    '''for i in range(rows):
-        disposition.append(deque())
-    for j in range(rows - 1):
-        disposition[j].append()
-    disposition[rows-1].append(x for x in range(n - capacity.__ceil__(), n))'''
-
     return sol.Solution(plant, disposition)
 
 
@@ -68,15 +60,14 @@ def reorganize_list(lista):
     new_list = []
     for i in range(0, len(lista), 2):
         new_list.append(lista[i])
-    for i in range(len(lista) - 1 - ((len(lista) % 2)), 0, -2):
+    for i in range(len(lista) - 1 - (len(lista) % 2), 0, -2):
         if i == -1:
             break
         new_list.append(lista[i])
     return new_list
 
-    return resultado
 
-def construct_greedy_2(plant):
+def construct_guillermo(plant):
     rows = plant.rows
     n = plant.number
     capacities = plant.capacities
@@ -84,7 +75,8 @@ def construct_greedy_2(plant):
     disposition_aux = []
     capacity = n / rows
     values = deepcopy(plant.facilities)
-    bestSolution = sol.Solution(cost=float('inf'))
+    best_solution\
+        = sol.Solution(cost=float('inf'))
 
     index = 0
     for j in range(rows):
@@ -96,8 +88,7 @@ def construct_greedy_2(plant):
         while factor_length < 1:
             factor_distances = 0.1
             while factor_distances < 1:
-                suma_costos_true = 0
-                suma_costos_false = 0
+
                 disposition = []
                 for i in range(rows):
                     facilities_sorted = sorted(
@@ -111,16 +102,16 @@ def construct_greedy_2(plant):
                     disposition.append(facilities_sorted)
 
                 new_solution = sol.Solution(plant, disposition)
-                if new_solution < bestSolution:
-                    bestSolution = new_solution
+                if new_solution < best_solution:
+                    best_solution = new_solution
 
                 factor_distances += 0.1
             factor_length += 0.1
 
-    return bestSolution
+    return best_solution
 
 
-def constructor_grasp(plant, alfa):
+def constructor_greedy_random_by_row(plant, alfa):
 
     rows = plant.rows
     disposition = [[] for _ in range(rows)]
@@ -190,8 +181,7 @@ def select_random_candidates(row_facilities, alfa):
     candidates = (alfa * len(row_facilities)).__ceil__()
     return random.sample(row_facilities, min(candidates, len(row_facilities)))
 
-def constructor_grasp_2(plant, alfa):
-    import random
+def constructor_greedy_random_global(plant, alfa):
 
     rows = plant.rows
     disposition = [[] for _ in range(rows)]
