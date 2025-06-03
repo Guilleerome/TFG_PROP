@@ -54,10 +54,45 @@ def evaluate_cost_matrix(plant, disposition):
     i, j = np.triu_indices(n, k=1)
     diffs = np.abs(origin_dist[i] - origin_dist[j])
 
-
     flows = matrix[i, j]
     cost = np.dot(flows, diffs)
     return cost
+
+
+def evaluate_cost_matrix_partial(plant, disposition):
+    sizes = np.array(plant.facilities, dtype=float)
+    n     = sizes.size
+    origin_dist = np.empty(n, dtype=float)
+
+    # Calcula posiciones centrales de las colocadas (O(n))
+    for row in disposition:
+        if not row:
+            continue
+        idx = np.array(row, dtype=int)
+        row_sizes = sizes[idx]
+        starts = np.concatenate(([0], np.cumsum(row_sizes[:-1])))
+        origin_dist[idx] = starts + row_sizes/2
+
+    # Aplanamos las filas en un solo array de ints
+    arrays = [np.array(row, dtype=int) for row in disposition if row]
+    if not arrays:
+        return 0.0
+    placed = np.concatenate(arrays)
+
+    # Genera pares i<j de las p colocadas (O(p^2))
+    p = placed.size
+    # repite y tile para obtener todas las combinaciones
+    i = np.repeat(placed, p)
+    j = np.tile(placed, p)
+    mask = i < j
+    i = i[mask]
+    j = j[mask]
+
+    diffs  = np.abs(origin_dist[i] - origin_dist[j])
+    matrix = np.array(plant.matrix)
+    flows  = matrix[i, j]
+
+    return float(np.dot(flows, diffs))
 
 
 class Solution:
@@ -70,7 +105,8 @@ class Solution:
                 evaluate_cost_matrix(plant, disposition) if plant.rows <= 2
                 else evaluate_cost(plant, disposition)
             ) if np.sum([np.sum(row) for row in disposition]) == plant.number
-            else evaluate_cost(plant, disposition)
+            else
+                evaluate_cost_matrix_partial(plant, disposition)
         )
 
 

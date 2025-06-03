@@ -2,7 +2,7 @@ import instances_reader as ir
 import constructor as construct
 import solution as sol
 import time
-import local_Search as ls
+import local_search as ls
 import xlsxwriter
 from itertools import permutations
 from typing import Dict, Any, List
