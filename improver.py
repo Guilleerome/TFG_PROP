@@ -46,7 +46,7 @@ def improve_greedy(solution):
         if used_dispositions.count(disposition_aux) > 2:
             break
 
-        new_solution.changeDisposition(disposition_aux)
+        new_solution.change_disposition(disposition_aux)
         if new_solution < best_solution:
             best_solution = copy.deepcopy(new_solution)
 
