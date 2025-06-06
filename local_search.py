@@ -4,17 +4,52 @@ from itertools import combinations
 import random
 from copy import deepcopy
 
-def copy_disposition(disposition):
+def _copy_disposition(disposition):
     return [row[:] for row in disposition]
 
-def swap_facilities(disposition, row, idx1, idx2):
+def _swap_facilities(disposition, row, idx1, idx2):
     disposition[row][idx1], disposition[row][idx2] = disposition[row][idx2], disposition[row][idx1]
 
-def first_move_swap(solution):
+def _sample_swap_pairs(q, s):
+    total_pairs = q * (q - 1) // 2
+    if s >= total_pairs:
+        return list(combinations(range(q), 2))
+
+    seen = set()
+    result = []
+    while len(result) < s:
+        j = random.randrange(q)
+        k = random.randrange(q)
+        if j == k:
+            continue
+        a, b = (j, k) if j < k else (k, j)
+        if (a, b) not in seen:
+            seen.add((a, b))
+            result.append((a, b))
+    return result
+
+def _sample_insertion_moves(q, s):
+    total_moves = q * (q - 1)
+    if s >= total_moves:
+        return [(j, k) for j in range(q) for k in range(q) if j != k]
+
+    seen = set()
+    result = []
+    while len(result) < s:
+        j = random.randrange(q)
+        k = random.randrange(q)
+        if j == k:
+            continue
+        if (j, k) not in seen:
+            seen.add((j, k))
+            result.append((j, k))
+    return result
+
+def first_move_swap(solution, s=500):
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = copy_disposition(solution.disposition)
+    best_disp = _copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -23,9 +58,14 @@ def first_move_swap(solution):
         order_rows = np.random.permutation(len(solution.disposition))
 
         for i in order_rows:
-            for j, k in combinations(range(len(best_disp[i])), 2):
-                disposition_aux = copy_disposition(best_disp)
-                swap_facilities(disposition_aux, i, j, k)
+            q = len(best_disp[i])
+            if q < 2:
+                continue
+
+            pairs = _sample_swap_pairs(q, s)
+            for j, k in pairs:
+                disposition_aux = _copy_disposition(best_disp)
+                _swap_facilities(disposition_aux, i, j, k)
 
                 cost_aux = evaluator.evaluate(disposition_aux)
 
@@ -39,28 +79,17 @@ def first_move_swap(solution):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def best_move_swap(solution):
+def best_move_swap(solution, s=500):
     plant = solution.plant
-    evaluator = plant.evaluator
-
-    best_disp = copy_disposition(solution.disposition)
+    best_disp = _copy_disposition(solution.disposition)
     best_cost = solution.cost
+
     improved = True
 
     while improved:
         improved = False
-        current_best_cost = best_cost
-        current_best_disp = None
 
-        for i in range(len(best_disp)):
-            for j, k in combinations(range(len(best_disp[i])), 2):
-                disposition_aux = copy_disposition(best_disp)
-                swap_facilities(disposition_aux, i, j, k)
-
-                cost_aux = evaluator.evaluate(disposition_aux)
-                if cost_aux < current_best_cost:
-                    current_best_cost = cost_aux
-                    current_best_disp = disposition_aux
+        current_best_disp, current_best_cost = _best_swap(plant, best_disp, best_cost, s)
 
         if current_best_disp is not None:
             best_disp = current_best_disp
@@ -69,12 +98,11 @@ def best_move_swap(solution):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-
-def first_move(solution):
+def first_move(solution, s=500):
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = copy_disposition(solution.disposition)
+    best_disp = _copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -82,37 +110,37 @@ def first_move(solution):
         improved = False
         order_rows = np.random.permutation(len(solution.disposition))
 
-        for i in order_rows:
-            row = best_disp[i]
-            for j in range(len(row)):
-                facility = row[j]
-                row_minus_j = row[:j] + row[j+1:]
+        for r in order_rows:
+            q = len(best_disp[r])
+            if q < 1:
+                continue
 
-                for k in range(len(row_minus_j) + 1):
-                    new_row = row_minus_j[:k] + [facility] + row_minus_j[k:]
+            pairs = _sample_insertion_moves(q, s)
+            for (j,k) in pairs:
+                disposition_aux = _copy_disposition(best_disp)
+                row_aux = disposition_aux[r]
 
-                    disposition_aux = copy_disposition(best_disp)
-                    disposition_aux[i] = new_row
+                facility = row_aux[j]
+                del row_aux[j]
+                row_aux.insert(k, facility)
 
-                    cost_aux = evaluator.evaluate(disposition_aux)
+                cost_aux = evaluator.evaluate(disposition_aux)
 
-                    if cost_aux < best_cost:
-                        best_disp = disposition_aux
-                        best_cost = cost_aux
-                        improved = True
-                        break
-                if improved:
+                if cost_aux < best_cost:
+                    best_disp = disposition_aux
+                    best_cost = cost_aux
+                    improved = True
                     break
             if improved:
                 break
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def best_move(solution):
+def best_move(solution, s=500):
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = copy_disposition(solution.disposition)
+    best_disp = _copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -122,23 +150,23 @@ def best_move(solution):
         best_change_cost = best_cost
         best_change_disp = None
 
-        for i in range(len(best_disp)):
-            row = best_disp[i]
-            row_len = len(row)
+        for r in range(len(best_disp)):
+            q = len(best_disp[r])
+            if q < 2:
+                continue
 
-            for j in range(row_len):
-                facility = row[j]
-                row_minus_j = row[:j] + row[j+1:]
+            pairs = _sample_insertion_moves(q, s)
+            for (j,k) in pairs:
+                disposition_aux = _copy_disposition(best_disp)
+                row_aux = disposition_aux[r]
+                facility = row_aux[j]
+                del row_aux[j]
+                row_aux.insert(k, facility)
 
-                for k in range(row_len):
-                    new_row = row_minus_j[:k] + [facility] + row_minus_j[k:]
-                    disposition_aux = copy_disposition(best_disp)
-                    disposition_aux[i] = new_row
-
-                    cost_aux = evaluator.evaluate(disposition_aux)
-                    if cost_aux < best_change_cost:
-                        best_change_disp = disposition_aux
-                        best_change_cost = cost_aux
+                cost_aux = evaluator.evaluate(disposition_aux)
+                if cost_aux < best_change_cost:
+                    best_change_disp = disposition_aux
+                    best_change_cost = cost_aux
 
         if best_change_disp is not None:
             best_disp = best_change_disp
@@ -147,20 +175,20 @@ def best_move(solution):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def combined_local_search(initial_solution):
+def combined_local_search(initial_solution, s=500):
     current = initial_solution
     improved = True
 
     while improved:
         improved = False
 
-        bms_sol = best_move_swap(current)
+        bms_sol = best_move_swap(current, s)
         if bms_sol.cost < current.cost:
             current = bms_sol
             improved = True
 
             if random.choice([True, False]):
-                fm_sol = first_move(current)
+                fm_sol = first_move(current, s)
                 if fm_sol.cost < current.cost:
                     current = fm_sol
             else:
@@ -169,6 +197,51 @@ def combined_local_search(initial_solution):
                     current = bm_sol
 
     return current
+
+def swap_then_first_one_by_one(initial_solution, s=500):
+    current = initial_solution
+    while True:
+        sol_bms, improved = _best_move_swap_once(current, s)
+        if not improved:
+            return current
+        sol_fm = first_move(sol_bms, s)
+        current = sol_fm
+
+def _best_move_swap_once(solution, s=500):
+    plant = solution.plant
+    disp = solution.disposition
+    current_cost = solution.cost
+    evaluator = plant.evaluator
+
+    best_swap_disp, current_best_cost = _best_swap(plant, disp, current_cost, s)
+
+    if best_swap_disp is None:
+        return solution, False
+    else:
+        new_sol = sol.Solution(plant, best_swap_disp, cost=current_best_cost)
+        return new_sol, True
+
+def _best_swap(plant, disp, current_cost, s):
+    evaluator = plant.evaluator
+
+    best_cost = current_cost
+    best_disp = None
+
+    for i in range(len(disp)):
+        q = len(disp[i])
+        if q < 2:
+            continue
+
+        for j, k in _sample_swap_pairs(q, s):
+            candidate_disp = _copy_disposition(disp)
+            _swap_facilities(candidate_disp, i, j, k)
+
+            cost_aux = evaluator.evaluate(candidate_disp)
+            if cost_aux < best_cost:
+                best_cost = cost_aux
+                best_disp = candidate_disp
+
+    return best_disp, best_cost
 
 def iterative_local_search(plant, initial_solution):
 
