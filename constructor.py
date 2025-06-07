@@ -1,5 +1,7 @@
 import math
 
+import numpy as np
+
 import instances_reader as ir
 from collections import deque
 import solution as sol
@@ -114,7 +116,7 @@ def constructor_greedy_random_by_row(plant, alfa, sample_size=40):
             min_cost = float('inf')
             max_cost = float('-inf')
             for f in available_facilities_sample:
-                cost = _cost_if_add(evaluator, f, row)
+                cost = evaluator.cost_if_add(evaluator, row, f)
                 candidates.append((f, cost))
                 if cost < min_cost: min_cost = cost
                 if cost > max_cost: max_cost = cost
@@ -157,7 +159,7 @@ def constructor_greedy_random_global(plant, alfa, sample_size=40):
         max_cost = float('-inf')
         candidates = []
         for (r, f) in candidates_sample:
-            cost = _cost_if_add(evaluator, f, r)
+            cost = evaluator.cost_if_add(evaluator, r, f)
             candidates.append((f, r, cost))
             if cost < min_cost: min_cost = cost
             if cost > max_cost: max_cost = cost
@@ -195,7 +197,7 @@ def constructor_random_greedy(plant, alfa, sample_size=40):
             available_facilities = _select_random_candidates(facilities_by_row[row], alfa)
             candidates = []
             for f in available_facilities:
-                cost = _cost_if_add(evaluator, f, row)
+                cost = evaluator.cost_if_add(evaluator, row, f)
                 candidates.append((f, cost))
 
             selected_candidate, _ = min(candidates, key=lambda x: x[1])
@@ -215,11 +217,10 @@ def _select_random_candidates(row_facilities, alfa, sample_size=40):
     return random.sample(row_facilities, s)
 
 def _calculate_value_distances_length(plant, facilities, factor_length, factor_distances):
-    facilities_calculated = []
-    for i, n in facilities:
-        v = plant.matrix[i]
-        facilities_calculated.append((i, ((sum(v) * factor_distances) + (n * factor_length))))
-    return facilities_calculated
+    return [
+        (i, (np.sum(plant.matrix[i]) * factor_distances + n * factor_length))
+        for i, n in facilities
+    ]
 
 def _reorganize_list(lista):
     new_list = []
@@ -231,27 +232,11 @@ def _reorganize_list(lista):
         new_list.append(lista[i])
     return new_list
 
-def _cost_if_add(evaluator, f, row):
-    evaluator.push_move(row, f)
-    cost = evaluator.evaluate_partial()
-    evaluator.pop_move(row, f)
-    return cost
-
 def _sample_pairs(facilities_by_row, rows, sample_size):
-    total_pairs = sum(len(facilities_by_row[r]) for r in rows)
-
-    if total_pairs <= 5 * sample_size:
-        all_pairs = [(r, f) for r in rows for f in facilities_by_row[r]]
-        if len(all_pairs) <= sample_size:
-            return all_pairs
-        return random.sample(all_pairs, sample_size)
-
-    sample_set = set()
-    rows_list = list(rows)
-    while len(sample_set) < sample_size:
-        r = random.choice(rows_list)
-        f = random.choice(facilities_by_row[r])
-        sample_set.add((r, f))
-    return list(sample_set)
+    all_pairs = [(r, f) for r in rows for f in facilities_by_row[r]]
+    total = len(all_pairs)
+    if total <= sample_size:
+        return all_pairs
+    return random.sample(all_pairs, sample_size)
 
 

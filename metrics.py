@@ -11,17 +11,21 @@ import numpy as np
 class Metrics:
     def __init__(
         self,
-        iteraciones: int = 60,
         excel_path: str = "experiments_results.xlsx",
+        iterations: int = 60,
+        plants = None,
         alphas=None
     ):
         if alphas is None:
             alphas = [0.25, 0.5, 0.75, 1.0]
-        self.iteraciones = iteraciones
-        self.excel_path = excel_path
+        self.iterations = iterations
+        self.excel_path =  "results/" + excel_path
         self.alphas = alphas
 
-        self.plants = ir.read_instances("small")
+        if plants is None:
+            self.plants = ir.read_instances("small")
+        else:
+            self.plants = plants
         self.results: Dict[str, Any] = {}
 
         inicio = time.time()
@@ -83,7 +87,7 @@ class Metrics:
             # Ejecución del Random
             random_time_acc = 0  # Acumulador de tiempo para Random
 
-            for _ in range(self.iteraciones):
+            for _ in range(self.iterations):
                 start_time = time.time()
                 random_solution = construct.construct_random(plant)
                 random_time_acc += time.time() - start_time

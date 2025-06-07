@@ -48,6 +48,12 @@ class CostEvaluator:
         # 3) Si quedan instalaciones, recalculamos para todas ellas:
         self.recalculate_distances(row)
 
+    def cost_if_add(self, row, f):
+        self.push_move(row, f)
+        cost = self.evaluate_partial()
+        self.pop_move(row, f)
+        return cost
+
     def recalculate_distances(self, row):
         idx = np.array(self._placed[row], dtype=int)
         row_sizes = self.sizes[idx]
