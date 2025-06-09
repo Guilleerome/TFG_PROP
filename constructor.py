@@ -1,9 +1,5 @@
 import math
-
 import numpy as np
-
-import instances_reader as ir
-from collections import deque
 import solution as sol
 from copy import deepcopy
 import random
@@ -25,7 +21,6 @@ def construct_random(plant):
         disposition.append(row_facilities)
 
     return sol.Solution(plant, disposition)
-
 
 def construct_greedy(plant):
     rows = plant.rows
@@ -116,7 +111,7 @@ def constructor_greedy_random_by_row(plant, alfa, sample_size=40):
             min_cost = float('inf')
             max_cost = float('-inf')
             for f in available_facilities_sample:
-                cost = evaluator.cost_if_add(evaluator, row, f)
+                cost = evaluator.cost_if_add(row, f)
                 candidates.append((f, cost))
                 if cost < min_cost: min_cost = cost
                 if cost > max_cost: max_cost = cost
@@ -159,7 +154,7 @@ def constructor_greedy_random_global(plant, alfa, sample_size=40):
         max_cost = float('-inf')
         candidates = []
         for (r, f) in candidates_sample:
-            cost = evaluator.cost_if_add(evaluator, r, f)
+            cost = evaluator.cost_if_add(r, f)
             candidates.append((f, r, cost))
             if cost < min_cost: min_cost = cost
             if cost > max_cost: max_cost = cost
@@ -194,10 +189,10 @@ def constructor_random_greedy(plant, alfa, sample_size=40):
     for row in random.sample(range(rows), rows):
         while facilities_by_row[row]:
 
-            available_facilities = _select_random_candidates(facilities_by_row[row], alfa)
+            available_facilities = _select_random_candidates(facilities_by_row[row], alfa, sample_size)
             candidates = []
             for f in available_facilities:
-                cost = evaluator.cost_if_add(evaluator, row, f)
+                cost = evaluator.cost_if_add(row, f)
                 candidates.append((f, cost))
 
             selected_candidate, _ = min(candidates, key=lambda x: x[1])
