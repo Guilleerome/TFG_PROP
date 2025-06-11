@@ -1,5 +1,5 @@
-
 import numpy as np
+from typing import List
 
 class CostEvaluator:
 
@@ -53,7 +53,7 @@ class CostEvaluator:
         self.pop_move(row, f)
         return cost
 
-    def recalculate_distances(self, row) -> None:
+    def recalculate_distances(self, row: int) -> None:
         idx = np.array(self._placed[row], dtype=int)
         row_sizes = self.sizes[idx]
         # starts[k] = suma de tamaños de las anteriores en esta fila
@@ -90,27 +90,27 @@ class CostEvaluator:
         self.diffs_full[:] = np.abs(self.origin_dist[self.i] - self.origin_dist[self.j])
         return float(np.dot(self.flows_full, self.diffs_full))
 
-    def evaluate_full_with_disposition(self, disposition: list) -> float:
+    def evaluate_full_with_disposition(self, disposition: List[List[int]]) -> float:
         self.update_new_disposition(disposition)
         return self.evaluate_full()
 
-    def evaluate_partial_with_disposition(self, disposition: list) -> float:
+    def evaluate_partial_with_disposition(self, disposition: List[List[int]]) -> float:
         self.update_new_disposition(disposition)
         return self.evaluate_partial()
 
-    def update_new_disposition(self, disposition: list):
+    def update_new_disposition(self, disposition: List[List[int]]) -> None:
         self.reset()
         for row_idx, row_list in enumerate(disposition):
             for facility in row_list:
                 self.push_move(row_idx, facility)
 
-    def evaluate(self, disposition) -> float:
+    def evaluate(self, disposition: List[List[int]]) -> float:
         if sum(len(fila) for fila in disposition) == self.n:
             return self.evaluate_full_with_disposition(disposition)
         else:
             return self.evaluate_partial_with_disposition(disposition)
 
-    def _traditional_evaluate_cost(self, disposition):
+    def _traditional_evaluate_cost(self, disposition: List[List[int]]) -> float:
         cost = 0
         for row in range(len(disposition)):
             for facility in disposition[row]:

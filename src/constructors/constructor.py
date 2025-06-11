@@ -1,15 +1,14 @@
 import math
-from typing import Any
-
 import numpy as np
-import solution as sol
+from typing import List, Tuple
+from src.models.solution import Solution
+from src.models.plant import Plant
+from sklearn.cluster import KMeans
 from copy import deepcopy
 import random
 
-from plant import Plant
 
-
-def construct_random(plant) -> sol.Solution:
+def construct_random(plant: Plant) -> Solution:
     rows = plant.rows
     n = plant.number
     disposition = []
@@ -24,9 +23,9 @@ def construct_random(plant) -> sol.Solution:
         random.shuffle(row_facilities)
         disposition.append(row_facilities)
 
-    return sol.Solution(plant, disposition)
+    return Solution(plant, disposition)
 
-def construct_greedy(plant) -> sol.Solution:
+def construct_greedy(plant: Plant) -> Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition = []
@@ -43,14 +42,14 @@ def construct_greedy(plant) -> sol.Solution:
         facilities_sorted = [x[0] for x in facilities_sorted]
         disposition.append(facilities_sorted)
 
-    return sol.Solution(plant, disposition)
+    return Solution(plant, disposition)
 
-def construct_guillermo(plant) -> sol.Solution:
+def construct_guillermo(plant: Plant) -> Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition_aux = []
     values = deepcopy(plant.facilities)
-    best_solution = sol.Solution(plant, disposition = [], cost=float('inf'))
+    best_solution = Solution(plant, disposition = [], cost=float('inf'))
 
     index = 0
     for j in range(rows):
@@ -65,7 +64,7 @@ def construct_guillermo(plant) -> sol.Solution:
                 disposition_candidate = []
                 for i in range(rows):
                     facilities_sorted = sorted(
-                        _calculate_value_distances_length(plant, disposition_aux[i].items(),
+                        _calculate_value_distances_length(plant, list(disposition_aux[i].items()),
                                                          factor_length,factor_distances),
                         key=lambda x: x[1],
                         reverse=order
@@ -83,7 +82,7 @@ def construct_guillermo(plant) -> sol.Solution:
 
     return best_solution
 
-def constructor_greedy_random_by_row(plant, alfa: float, sample_size:int=40) -> sol.Solution:
+def constructor_greedy_random_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition = [[] for _ in range(rows)]
@@ -129,9 +128,9 @@ def constructor_greedy_random_by_row(plant, alfa: float, sample_size:int=40) -> 
             evaluator.push_move(row, selected_facility)
             available_facilities.remove(selected_facility)
 
-    return sol.Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition, cost = cost)
 
-def constructor_greedy_random_global(plant, alfa: float, sample_size:int=40) -> sol.Solution:
+def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition = [[] for _ in range(rows)]
@@ -175,12 +174,12 @@ def constructor_greedy_random_global(plant, alfa: float, sample_size:int=40) -> 
         facilities_by_row[selected_row].remove(selected_facility)
         capacities_remaining[selected_row] -= 1
 
-    return sol.Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition, cost = cost)
 
-def constructor_random_greedy(plant, alfa: float, sample_size:int=40) -> sol.Solution:
+def constructor_random_greedy(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
     evaluator = plant.evaluator
-    disposition = [[] for _ in range(rows)]
+    disposition: List[List[int]] = [[] for _ in range(rows)]
 
     evaluator.reset()
     index = 0
@@ -205,9 +204,9 @@ def constructor_random_greedy(plant, alfa: float, sample_size:int=40) -> sol.Sol
             evaluator.push_move(row, selected_candidate)
             facilities_by_row[row].remove(selected_candidate)
 
-    return sol.Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition, cost = cost)
 
-def _select_random_candidates(row_facilities: list, alfa: float, sample_size:int=40) -> list:
+def _select_random_candidates(row_facilities: List[int], alfa: float, sample_size:int=40) -> List[int]:
     q = len(row_facilities)
     if q <= sample_size:
         return row_facilities
@@ -215,13 +214,13 @@ def _select_random_candidates(row_facilities: list, alfa: float, sample_size:int
     s = min(num_by_alfa, sample_size)
     return random.sample(row_facilities, s)
 
-def _calculate_value_distances_length(plant, facilities, factor_length : float, factor_distances: float) -> list:
+def _calculate_value_distances_length(plant: Plant, facilities: List[Tuple[int, int]], factor_length : float, factor_distances: float) -> List[Tuple[int, float]]:
     return [
         (i, (np.sum(plant.matrix[i]) * factor_distances + n * factor_length))
         for i, n in facilities
     ]
 
-def _reorganize_list(l: list) -> list:
+def _reorganize_list(l: List[int]) -> List[int]:
     new_list = []
     for i in range(0, len(l), 2):
         new_list.append(l[i])
@@ -231,7 +230,7 @@ def _reorganize_list(l: list) -> list:
         new_list.append(l[i])
     return new_list
 
-def _sample_pairs(facilities_by_row: list, rows: list, sample_size: int) -> list:
+def _sample_pairs(facilities_by_row: List[List[int]], rows: List[int], sample_size: int) -> List[Tuple[int, int]]:
     all_pairs = [(r, f) for r in rows for f in facilities_by_row[r]]
     total = len(all_pairs)
     if total <= sample_size:

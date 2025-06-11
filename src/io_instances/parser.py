@@ -1,8 +1,9 @@
 import zipfile
 from pathlib import Path
+from typing import Union
 import re
 
-def restructure_instances_parallel_row_benchmarks_zip(zip_path: Path):
+def restructure_instances_parallel_row_benchmarks_zip(zip_path: Union[str, Path]) -> None:
     zip_path = Path(zip_path)
     out_dir = zip_path.with_suffix('')
     out_dir.mkdir(exist_ok=True)
@@ -17,39 +18,39 @@ def restructure_instances_parallel_row_benchmarks_zip(zip_path: Path):
             nums = list(map(int, re.findall(r'-?\d+', raw)))
 
             idx = 0
-            N = nums[idx];
+            n = nums[idx]
             idx += 1  # total de facilities
-            F = nums[idx];
+            f = nums[idx]
             idx += 1  # número de filas (se asume 2)
-            if F != 2:
-                raise ValueError(f"{member}: se esperaban 2 filas, pero F={F}")
+            if f != 2:
+                raise ValueError(f"{member}: se esperaban 2 filas, pero F={f}")
 
             # Capacidades de cada fila
-            row_caps = nums[idx: idx + F]
-            idx += F
+            row_caps = nums[idx: idx + f]
+            idx += f
             if len(row_caps) != 2:
                 raise ValueError(f"{member}: no hay dos capacidades de fila")
 
             # Tamaños de cada facility
-            sizes = nums[idx: idx + N]
-            idx += N
-            if len(sizes) != N:
-                raise ValueError(f"{member}: faltan tamaños (esperados {N}, hallados {len(sizes)})")
+            sizes = nums[idx: idx + n]
+            idx += n
+            if len(sizes) != n:
+                raise ValueError(f"{member}: faltan tamaños (esperados {n}, hallados {len(sizes)})")
 
             # Matriz de costes plana
-            total_costs = N * N
+            total_costs = n * n
             flat_costs = nums[idx: idx + total_costs]
             idx += total_costs
             if len(flat_costs) != total_costs:
                 raise ValueError(f"{member}: faltan costes (esperados {total_costs}, hallados {len(flat_costs)})")
 
             # Reconstruir la matriz N×N
-            matrix = [flat_costs[i * N:(i + 1) * N] for i in range(N)]
+            matrix = [flat_costs[i * n:(i + 1) * n] for i in range(n)]
 
             # Guardar en el formato estándar
             dest = out_dir / Path(member).name
             with open(dest, 'w', encoding='utf-8') as fout:
-                fout.write(f"{N}\n")
+                fout.write(f"{n}\n")
                 fout.write(" ".join(map(str, sizes)) + "\n")
                 fout.write(f"{row_caps[0]} {row_caps[1]}\n")
                 for row in matrix:
@@ -57,7 +58,7 @@ def restructure_instances_parallel_row_benchmarks_zip(zip_path: Path):
 
     print(f"Instancias re-estructuradas en: {out_dir}")
 
-def restructure_instances_prop_instances(zip_path: Path):
+def restructure_instances_prop_instances(zip_path: Union[str, Path]) -> None:
     zip_path = Path(zip_path)
     out_dir = zip_path.with_suffix('')
     out_dir.mkdir(exist_ok=True)

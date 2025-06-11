@@ -1,18 +1,18 @@
-import zipfile
 from pathlib import Path
+from typing import List
+from src.models.plant import Plant
 
-import plant as plant_module
 
-def read_all_instances():
-    base = Path("instances")
+def read_all_instances() -> List[Plant]:
+    base = Path("../instances")
     all_plants = []
     for sub in sorted(base.iterdir()):
         if sub.is_dir():
             all_plants.extend(read_instances(sub.name))
     return all_plants
 
-def read_instances(folder_name: str):
-    base_dir = Path("instances") / folder_name
+def read_instances(folder_name: str) -> List[Plant]:
+    base_dir = Path("../instances") / folder_name
     plants = []
     for file_path in sorted(base_dir.glob("*.txt")):
         with file_path.open("r", encoding="utf-8") as f:
@@ -34,10 +34,10 @@ def read_instances(folder_name: str):
                     distances.append(fila)
             instance_name = file_path.stem
             # distances = make_matrix_symmetric(distances)
-            plants.append(plant_module.Plant(instance_name, n, len(capacities), capacities, facilities, distances))
+            plants.append(Plant(instance_name, n, len(capacities), capacities, facilities, distances))
     return plants
 
-def make_matrix_symmetric(m):
+def make_matrix_symmetric(m: List[List[int]]) -> List[List[int]]:
     n = len(m)
     for i in range(n):
         for j in range(i + 1, n):  # Solo completar la parte inferior

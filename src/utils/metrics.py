@@ -1,11 +1,10 @@
-import instances_reader as ir
-import constructor as construct
-import solution as sol
+from src.constructors.constructor import clustering_based_constructor
+from src.io_instances import instances_reader as ir
+from src.constructors import constructor as construct
 import time
-import local_search as ls
+from src.improvers import local_search as ls
 import xlsxwriter
-from itertools import permutations
-from typing import Dict, Any, List
+from typing import Dict, Any
 import numpy as np
 
 class Metrics:
