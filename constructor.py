@@ -1,11 +1,15 @@
 import math
+from typing import Any
+
 import numpy as np
 import solution as sol
 from copy import deepcopy
 import random
 
+from plant import Plant
 
-def construct_random(plant):
+
+def construct_random(plant) -> sol.Solution:
     rows = plant.rows
     n = plant.number
     disposition = []
@@ -22,7 +26,7 @@ def construct_random(plant):
 
     return sol.Solution(plant, disposition)
 
-def construct_greedy(plant):
+def construct_greedy(plant) -> sol.Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition = []
@@ -41,7 +45,7 @@ def construct_greedy(plant):
 
     return sol.Solution(plant, disposition)
 
-def construct_guillermo(plant):
+def construct_guillermo(plant) -> sol.Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition_aux = []
@@ -79,7 +83,7 @@ def construct_guillermo(plant):
 
     return best_solution
 
-def constructor_greedy_random_by_row(plant, alfa, sample_size=40):
+def constructor_greedy_random_by_row(plant, alfa: float, sample_size:int=40) -> sol.Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition = [[] for _ in range(rows)]
@@ -127,7 +131,7 @@ def constructor_greedy_random_by_row(plant, alfa, sample_size=40):
 
     return sol.Solution(plant=plant, disposition=disposition, cost = cost)
 
-def constructor_greedy_random_global(plant, alfa, sample_size=40):
+def constructor_greedy_random_global(plant, alfa: float, sample_size:int=40) -> sol.Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition = [[] for _ in range(rows)]
@@ -173,7 +177,7 @@ def constructor_greedy_random_global(plant, alfa, sample_size=40):
 
     return sol.Solution(plant=plant, disposition=disposition, cost = cost)
 
-def constructor_random_greedy(plant, alfa, sample_size=40):
+def constructor_random_greedy(plant, alfa: float, sample_size:int=40) -> sol.Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition = [[] for _ in range(rows)]
@@ -203,31 +207,31 @@ def constructor_random_greedy(plant, alfa, sample_size=40):
 
     return sol.Solution(plant=plant, disposition=disposition, cost = cost)
 
-def _select_random_candidates(row_facilities, alfa, sample_size=40):
+def _select_random_candidates(row_facilities: list, alfa: float, sample_size:int=40) -> list:
     q = len(row_facilities)
     if q <= sample_size:
-        return list(row_facilities)
+        return row_facilities
     num_by_alfa = math.ceil(alfa * q)
     s = min(num_by_alfa, sample_size)
     return random.sample(row_facilities, s)
 
-def _calculate_value_distances_length(plant, facilities, factor_length, factor_distances):
+def _calculate_value_distances_length(plant, facilities, factor_length : float, factor_distances: float) -> list:
     return [
         (i, (np.sum(plant.matrix[i]) * factor_distances + n * factor_length))
         for i, n in facilities
     ]
 
-def _reorganize_list(lista):
+def _reorganize_list(l: list) -> list:
     new_list = []
-    for i in range(0, len(lista), 2):
-        new_list.append(lista[i])
-    for i in range(len(lista) - 1 - (len(lista) % 2), 0, -2):
+    for i in range(0, len(l), 2):
+        new_list.append(l[i])
+    for i in range(len(l) - 1 - (len(l) % 2), 0, -2):
         if i == -1:
             break
-        new_list.append(lista[i])
+        new_list.append(l[i])
     return new_list
 
-def _sample_pairs(facilities_by_row, rows, sample_size):
+def _sample_pairs(facilities_by_row: list, rows: list, sample_size: int) -> list:
     all_pairs = [(r, f) for r in rows for f in facilities_by_row[r]]
     total = len(all_pairs)
     if total <= sample_size:

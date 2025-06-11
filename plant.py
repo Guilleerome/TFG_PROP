@@ -2,7 +2,7 @@ from cost_evaluator import CostEvaluator
 
 
 class Plant:
-    def __init__(self, name, number, rows, capacities, facilities, matrix):
+    def __init__(self, name: str, number: int, rows: int, capacities: list, facilities: list, matrix: list[list[int]]):
         self.name = name
         self.number = number
         self.rows = rows

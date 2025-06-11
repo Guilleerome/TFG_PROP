@@ -33,7 +33,7 @@ def run_serial(plants):
     for plant in plants:
         soluciones_finales = []
         for _ in range(NUM_CONSTRUCTIONS):
-            sol_inicial = construct.constructor_greedy_random_by_row(plant, alfa=ALFA, sample_size=SAMPLE_SIZE)
+            sol_inicial = construct.constructor_greedy_random_global(plant, alfa=ALFA, sample_size=SAMPLE_SIZE)
             sol_mejorada = ls.swap_then_first_one_by_one(sol_inicial)
             soluciones_finales.append(sol_mejorada)
 
@@ -41,11 +41,8 @@ def run_serial(plants):
         print(f"Plant: {plant.name}, Cost: {mejor_sol.cost}")
 
 def main():
-    plants = ir.read_instances("Parallel-Row Benchmarks")
-    start_time = time.time()
-    run_parallel(plants)
-    end_time = time.time()
-    print(f"Tiempo total: {end_time - start_time:.2f} segundos")
+    plants = ir.read_instances("Small")
+
     start_time = time.time()
     run_serial(plants)
     end_time = time.time()

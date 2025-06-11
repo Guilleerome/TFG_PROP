@@ -4,13 +4,16 @@ from itertools import combinations
 import random
 from copy import deepcopy
 
-def _copy_disposition(disposition):
+from solution import Solution
+
+
+def _copy_disposition(disposition: list) -> list:
     return [row[:] for row in disposition]
 
-def _swap_facilities(disposition, row, idx1, idx2):
+def _swap_facilities(disposition: list, row: int, idx1: int, idx2: int):
     disposition[row][idx1], disposition[row][idx2] = disposition[row][idx2], disposition[row][idx1]
 
-def _sample_swap_pairs(q, s):
+def _sample_swap_pairs(q: int, s: int) -> list:
     total_pairs = q * (q - 1) // 2
     if s >= total_pairs:
         return list(combinations(range(q), 2))
@@ -28,7 +31,7 @@ def _sample_swap_pairs(q, s):
             result.append((a, b))
     return result
 
-def _sample_insertion_moves(q, s):
+def _sample_insertion_moves(q: int, s: int) -> list:
     total_moves = q * (q - 1)
     if s >= total_moves:
         return [(j, k) for j in range(q) for k in range(q) if j != k]
@@ -45,7 +48,7 @@ def _sample_insertion_moves(q, s):
             result.append((j, k))
     return result
 
-def first_move_swap(solution, s=500):
+def first_move_swap(solution: sol.Solution, s: int=500) -> sol.Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
@@ -79,7 +82,7 @@ def first_move_swap(solution, s=500):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def best_move_swap(solution, s=500):
+def best_move_swap(solution: sol.Solution, s: int=500) -> sol.Solution:
     plant = solution.plant
     best_disp = _copy_disposition(solution.disposition)
     best_cost = solution.cost
@@ -98,7 +101,7 @@ def best_move_swap(solution, s=500):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def first_move(solution, s=500):
+def first_move(solution: sol.Solution, s: int=500) -> sol.Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
@@ -136,7 +139,7 @@ def first_move(solution, s=500):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def best_move(solution, s=500):
+def best_move(solution: sol.Solution, s: int=500) -> sol.Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
@@ -175,7 +178,7 @@ def best_move(solution, s=500):
 
     return sol.Solution(plant=plant, disposition=best_disp, cost=best_cost)
 
-def combined_local_search(initial_solution, s=500):
+def combined_local_search(initial_solution: sol.Solution, s: int=500) -> sol.Solution:
     current = initial_solution
     improved = True
 
@@ -198,7 +201,7 @@ def combined_local_search(initial_solution, s=500):
 
     return current
 
-def swap_then_first_one_by_one(initial_solution, s=500):
+def swap_then_first_one_by_one(initial_solution: sol.Solution, s: int=500) -> sol.Solution:
     current = initial_solution
     while True:
         sol_bms, improved = _best_move_swap_once(current, s)
@@ -207,7 +210,7 @@ def swap_then_first_one_by_one(initial_solution, s=500):
         sol_fm = first_move(sol_bms, s)
         current = sol_fm
 
-def _best_move_swap_once(solution, s=500):
+def _best_move_swap_once(solution: sol.Solution, s: int=500) -> tuple[Solution, bool]:
     plant = solution.plant
     disp = solution.disposition
     current_cost = solution.cost
@@ -221,7 +224,7 @@ def _best_move_swap_once(solution, s=500):
         new_sol = sol.Solution(plant, best_swap_disp, cost=current_best_cost)
         return new_sol, True
 
-def _best_swap(plant, disp, current_cost, s):
+def _best_swap(plant, disp: list, current_cost: float, s: int) -> tuple:
     evaluator = plant.evaluator
 
     best_cost = current_cost

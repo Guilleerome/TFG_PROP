@@ -1,7 +1,6 @@
 
 import numpy as np
 
-
 class CostEvaluator:
 
     def __init__(self, plant):
@@ -20,13 +19,13 @@ class CostEvaluator:
         self._placed = [[] for _ in range(self.plant.rows)]
         self._total_placed = 0
 
-    def reset(self):
+    def reset(self) -> None:
         self._placed = [[] for _ in range(self.plant.rows)]
         self._total_placed = 0
         # Reiniciamos todas las posiciones a 0
         self.origin_dist.fill(0.0)
 
-    def push_move(self, row, facility):
+    def push_move(self, row: int, facility: int) -> None:
         # 1) Insertar en la lista interna
         self._placed[row].append(facility)
         self._total_placed += 1
@@ -34,7 +33,7 @@ class CostEvaluator:
         # 2) Recalcular únicamente las posiciones centrales de todas las instalaciones en `row`
         self.recalculate_distances(row)
 
-    def pop_move(self, row, facility):
+    def pop_move(self, row: int, facility: int) -> None:
         # 1) Quitar de la lista interna
         self._placed[row].remove(facility)
         self._total_placed -= 1
@@ -48,20 +47,20 @@ class CostEvaluator:
         # 3) Si quedan instalaciones, recalculamos para todas ellas:
         self.recalculate_distances(row)
 
-    def cost_if_add(self, row, f):
+    def cost_if_add(self, row: int, f: int) -> float:
         self.push_move(row, f)
         cost = self.evaluate_partial()
         self.pop_move(row, f)
         return cost
 
-    def recalculate_distances(self, row):
+    def recalculate_distances(self, row) -> None:
         idx = np.array(self._placed[row], dtype=int)
         row_sizes = self.sizes[idx]
         # starts[k] = suma de tamaños de las anteriores en esta fila
         starts = np.concatenate(([0], np.cumsum(row_sizes[:-1])))
         self.origin_dist[idx] = starts + row_sizes / 2
 
-    def evaluate_partial(self):
+    def evaluate_partial(self) -> float:
         if self._total_placed == 0:
             return 0.0
 
@@ -86,26 +85,26 @@ class CostEvaluator:
         # 5) Producto punto
         return float(np.dot(flows, diffs))
 
-    def evaluate_full(self):
+    def evaluate_full(self) -> float:
         # Sólo tenemos que rellenar el vector de diferencias y hacer dot
         self.diffs_full[:] = np.abs(self.origin_dist[self.i] - self.origin_dist[self.j])
         return float(np.dot(self.flows_full, self.diffs_full))
 
-    def evaluate_full_with_disposition(self, disposition):
+    def evaluate_full_with_disposition(self, disposition: list) -> float:
         self.update_new_disposition(disposition)
         return self.evaluate_full()
 
-    def evaluate_partial_with_disposition(self, disposition):
+    def evaluate_partial_with_disposition(self, disposition: list) -> float:
         self.update_new_disposition(disposition)
         return self.evaluate_partial()
 
-    def update_new_disposition(self, disposition):
+    def update_new_disposition(self, disposition: list):
         self.reset()
         for row_idx, row_list in enumerate(disposition):
             for facility in row_list:
                 self.push_move(row_idx, facility)
 
-    def evaluate(self, disposition):
+    def evaluate(self, disposition) -> float:
         if sum(len(fila) for fila in disposition) == self.n:
             return self.evaluate_full_with_disposition(disposition)
         else:
