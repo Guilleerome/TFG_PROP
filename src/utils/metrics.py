@@ -1,4 +1,4 @@
-from src.constructors.constructor import clustering_based_constructor
+
 from src.io_instances import instances_reader as ir
 from src.constructors import constructor as construct
 import time
