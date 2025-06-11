@@ -18,7 +18,7 @@ class Metrics:
         if alphas is None:
             alphas = [0.25, 0.5, 0.75, 1.0]
         self.iterations = iterations
-        self.excel_path =  "results/" + excel_path
+        self.excel_path =  "../results/" + excel_path
         self.alphas = alphas
 
         if plants is None:
