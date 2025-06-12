@@ -33,6 +33,26 @@ class Metrics:
         fin = time.time()
         print(f"Tiempo total de métricas: {fin - inicio:.2f}s")
 
+    def get_alias(self, name: str) -> str:
+        constructor_aliases = {
+            "random": "C₀",
+            "guillermo": "C₁",
+            "greedy_random_by_row": "C₂",
+            "greedy_random_global": "C₃",
+            "random_greedy_by_row": "C₄",
+            "random_greedy_global": "C₅",
+        }
+        if "(α=" in name:
+            base, alpha = name.split("(α=")
+            alpha = "(α=" + alpha
+            base = base.strip()
+        elif "(alpha" in name:
+            base, alpha = name.split("(alpha")
+            alpha = "(α=" + alpha
+            base = base.strip()
+        else:
+            base, alpha = name.strip(), ""
+        return f"{constructor_aliases.get(base, base)} {alpha}".strip()
 
     def run_experiments(self):
         results = {}
@@ -344,23 +364,21 @@ class Metrics:
         cell_format = workbook.add_format({"border": 1})
         cell_wrap_format = workbook.add_format({"border": 1})
         bold_format = workbook.add_format({"bold": True})
-
-        # Ajustar ancho de columnas
         default_column_width = 25
 
         # Tabla 1: Resultados generales por planta
         worksheet_general = workbook.add_worksheet("Resultados Generales")
         headers_general = [
-            "Planta", "Constructivo Guillermo (coste)",
-            "Constructivo Random (Promedio)",
-            "Constructivo Random Greedy by Row (α=0.25)", "Constructivo Random Greedy by Row(α=0.5)",
-            "Constructivo Random Greedy by Row (α=0.75)", "Constructivo Random Greedy by Row(α=1.0)",
-            "Constructivo Random Greedy Global (α=0.25)", "Constructivo Random Greedy Global(α=0.5)",
-            "Constructivo Random Greedy Global (α=0.75)", "Constructivo Random Greedy Global(α=1.0)",
-            "Constructivo Greedy Random by Row (α=0.25)", "Constructivo Greedy Random by Row (α=0.5)",
-            "Constructivo Greedy Random by Row (α=0.75)", "Constructivo Greedy Random by Row (α=1.0)",
-            "Constructivo Greedy Random Global (α=0.25)", "Constructivo Greedy Random Global (α=0.5)",
-            "Constructivo Greedy Random Global (α=0.75)", "Constructivo Greedy Random Global (α=1.0)",
+            "Planta", f"Constructivo {self.get_alias('guillermo')} (coste)",
+            f"Constructivo {self.get_alias('random')} (Promedio)",
+            f"Constructivo {self.get_alias('greedy_random_by_row (α=0.25)')}", f"Constructivo {self.get_alias('greedy_random_by_row (α=0.5)')}",
+            f"Constructivo {self.get_alias('greedy_random_by_row (α=0.75)')}", f"Constructivo {self.get_alias('greedy_random_by_row (α=1.0)')}",
+            f"Constructivo {self.get_alias('greedy_random_global (α=0.25)')}", f"Constructivo {self.get_alias('greedy_random_global (α=0.5)')}",
+            f"Constructivo {self.get_alias('greedy_random_global (α=0.75)')}", f"Constructivo {self.get_alias('greedy_random_global (α=1.0)')}",
+            f"Constructivo {self.get_alias('random_greedy_by_row (α=0.25)')}", f"Constructivo {self.get_alias('random_greedy_by_row (α=0.5)')}",
+            f"Constructivo {self.get_alias('random_greedy_by_row (α=0.75)')}", f"Constructivo {self.get_alias('random_greedy_by_row (α=1.0)')}",
+            f"Constructivo {self.get_alias('random_greedy_global (α=0.25)')}", f"Constructivo {self.get_alias('random_greedy_global (α=0.5)')}",
+            f"Constructivo {self.get_alias('random_greedy_global (α=0.75)')}", f"Constructivo {self.get_alias('random_greedy_global (α=1.0)')}",
             "Mejores Soluciones Iniciales"
         ]
         worksheet_general.write_row(0, 0, headers_general, header_format)
@@ -393,9 +411,9 @@ class Metrics:
 
         # Tabla 2: Best constructors
         worksheet = workbook.add_worksheet("Best constructivo")
-        constructores = ["guillermo", "random", "random_greedy_by_row", "random_greedy_global", "greedy_random_by_row", "greedy_random_global"]
+        constructores = ["guillermo", "random", "greedy_random_by_row", "greedy_random_global", "random_greedy_by_row", "random_greedy_global"]
 
-        headers = ["Instancia"] + constructores + ["Best"]
+        headers = ["Instancia"] + [self.get_alias(c) for c in constructores] + ["Best"]
 
         # Formatos
         cell_format = workbook.add_format({"border": 1, "align": "center"})
@@ -446,10 +464,11 @@ class Metrics:
         row_idx = 1
         for plant_name, plant_results in self.results.items():
             for solution_id, search_results in plant_results["local_search"]["individual"].items():
+                solution_id_alias = self.get_alias(solution_id)
                 for method, metrics in search_results.items():
                     local_search_data = [
                         plant_name,
-                        solution_id,
+                        solution_id_alias,
                         method,
                         metrics.get("cost", "N/A"),
                         metrics.get("time", "N/A")
@@ -492,14 +511,15 @@ class Metrics:
                 worksheet_best_local.write_row(
                     row,
                     0,
-                    [plant_name, best_constructor, "Ninguna búsqueda mejora la solución", initial_cost],
+                    [plant_name, self.get_alias(best_constructor), "Ninguna búsqueda mejora la solución", initial_cost],
                     cell_format,
                 )
             else:
+                best_solutions_aliases = [self.get_alias(sol) for sol in best_solutions]
                 worksheet_best_local.write_row(
                     row,
                     0,
-                    [plant_name, ", ".join(best_solutions), ", ".join(best_methods), best_cost],
+                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_methods), best_cost],
                     cell_format,
                 )
                 for method in best_methods:
@@ -536,7 +556,7 @@ class Metrics:
         worksheet_best_local.write_row(row, 0, ["Solución", "Veces mejor"], header_format)
         row += 1
         for solution, count in best_solution_count.items():
-            worksheet_best_local.write_row(row, 0, [solution, count], cell_format)
+            worksheet_best_local.write_row(row, 0, [self.get_alias(solution), count], cell_format)
             row += 1
 
         # Tabla 5: Resultados de búsquedas locales extendidas
@@ -548,10 +568,11 @@ class Metrics:
         row_idx = 1
         for plant_name, plant_results in self.results.items():
             for solution_id, extended_search_results in plant_results["local_search"]["extended"].items():
+                solution_id_alias = self.get_alias(solution_id)
                 for combination, metrics in extended_search_results.items():
                     extended_search_data = [
                         plant_name,
-                        solution_id,
+                        solution_id_alias,
                         combination,
                         metrics.get("cost", "N/A"),
                         metrics.get("time", "N/A")
@@ -602,14 +623,15 @@ class Metrics:
                 worksheet_best_extended.write_row(
                     row,
                     0,
-                    [plant_name, best_constructor, "Ninguna búsqueda mejora la solución", initial_cost],
+                    [plant_name, self.get_alias(best_constructor), "Ninguna búsqueda mejora la solución", initial_cost],
                     cell_format,
                 )
             else:
+                best_solutions_aliases = [self.get_alias(sol) for sol in best_solutions]
                 worksheet_best_extended.write_row(
                     row,
                     0,
-                    [plant_name, ", ".join(best_solutions), ", ".join(best_combinations), best_cost],
+                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_combinations), best_cost],
                     cell_format,
                 )
                 for combination in best_combinations:
@@ -639,7 +661,7 @@ class Metrics:
         row += 1
 
         for solution, count in best_solution_usage_count.items():
-            worksheet_best_extended.write_row(row, 0, [solution, count], cell_format)
+            worksheet_best_extended.write_row(row, 0, [self.get_alias(solution), count], cell_format)
             row += 1
 
         # Hoja de resultados generales
@@ -654,9 +676,10 @@ class Metrics:
         aggregated_constructors = self.aggregate_statistics_across_instances(self.results, "constructors")
         for method_name, method_data in aggregated_constructors.items():
             avg_cost, avg_time, std_dev, total_bests = self.calculate_overall_statistics([method_data])
+            alias_name = self.get_alias(method_name)
             worksheet_summary.write_row(
                 row_idx, 0,
-                [f"Constructivo - {method_name}", avg_cost, avg_time, std_dev, total_bests],
+                [f"Constructivo - {alias_name}", avg_cost, avg_time, std_dev, total_bests],
                 cell_format
             )
             row_idx += 1
