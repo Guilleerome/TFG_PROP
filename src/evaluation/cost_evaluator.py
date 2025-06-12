@@ -25,32 +25,35 @@ class CostEvaluator:
         # Reiniciamos todas las posiciones a 0
         self.origin_dist.fill(0.0)
 
-    def push_move(self, row: int, facility: int) -> None:
-        # 1) Insertar en la lista interna
-        self._placed[row].append(facility)
-        self._total_placed += 1
+    def push_move(self, row: int, facility: int, position: int = None) -> None:
+        if position is None or position >= len(self._placed[row]):
+            self._placed[row].append(facility)
+        else:
+            self._placed[row].insert(position, facility)
 
-        # 2) Recalcular únicamente las posiciones centrales de todas las instalaciones en `row`
+        self._total_placed += 1
         self.recalculate_distances(row)
 
-    def pop_move(self, row: int, facility: int) -> None:
-        # 1) Quitar de la lista interna
-        self._placed[row].remove(facility)
+    def pop_move(self, row: int, facility: int, position: int = None) -> None:
+        if position is not None:
+            if self._placed[row][position] != facility:
+                raise ValueError("La instalación y la posición no coinciden al hacer pop.")
+            del self._placed[row][position]
+        else:
+            self._placed[row].remove(facility)
+
         self._total_placed -= 1
 
-        # 2) Si la fila quedó vacía, ya no hay posiciones que calcular; las dejamos en 0.
         if not self._placed[row]:
-            # Ponemos a 0 el origin_dist[facility] y de cualquier otro que hubiera (pero es el único).
+            # Si la fila queda vacía, se puede omitir recalcular
             self.origin_dist[facility] = 0.0
-            return
+        else:
+            self.recalculate_distances(row)
 
-        # 3) Si quedan instalaciones, recalculamos para todas ellas:
-        self.recalculate_distances(row)
-
-    def cost_if_add(self, row: int, f: int) -> float:
-        self.push_move(row, f)
+    def cost_if_add(self, row: int, facility: int, position: int = None) -> float:
+        self.push_move(row, facility, position=position)
         cost = self.evaluate_partial()
-        self.pop_move(row, f)
+        self.pop_move(row, facility, position=position)
         return cost
 
     def recalculate_distances(self, row: int) -> None:

@@ -43,7 +43,8 @@ class Metrics:
 
             # Registrar tiempos
             times = {"Guillermo": [], "random": [], "greedy_random_by_row": [], "greedy_random_global":[],
-                     "random_greedy":[], "best_initial_solution" : 0, "local_search": {}, "iterative": 0}
+                     "random_greedy_by_row":[], "random_greedy_global":[],
+                     "best_initial_solution" : 0, "local_search": {}, "iterative": 0}
 
             start_time = time.time()
             guillermo_solution = construct.construct_guillermo(plant)
@@ -51,13 +52,15 @@ class Metrics:
 
             # Greedy random by row con diferentes valores de alfa y tiempos
             (greedy_random_by_row_solutions, greedy_random_global_solutions,
-             random_solutions, random_greedy_solutions) = [], [], [], []
-            greedy_random_by_row_times, greedy_random_global, random_times, random_greedy_times = [], [], [], []
+             random_solutions, random_greedy_by_row_solutions, random_greedy_global_solutions) = [], [], [], [], []
+            (greedy_random_by_row_times, greedy_random_global_times, random_times,
+             random_greedy_by_row_times, random_greedy_global_times) = [], [], [], [], []
 
             for alpha in self.alphas:
                 greedy_random_by_row_time_acc = 0  # Acumulador de tiempo para Greedy random by row
                 greedy_random_global_time_acc = 0  # Acumulador de tiempo para Greedy random global
-                random_greedy_time_acc = 0  # Acumulador de tiempo para Random Greedy
+                random_greedy_by_row_time_acc = 0  # Acumulador de tiempo para Random Greedy by row
+                random_greedy_global_time_acc = 0  # Acumulador de tiempo para Random Greedy Global
 
                 for _ in range(iteraciones):
                     # Greedy random by row
@@ -74,14 +77,21 @@ class Metrics:
 
                     # Random Greedy
                     start_time = time.time()
-                    random_greedy_solution = construct.constructor_random_greedy(plant, alpha)
-                    random_greedy_time_acc += time.time() - start_time
-                    random_greedy_solutions.append((alpha, random_greedy_solution))
+                    random_greedy_by_row_solution = construct.constructor_random_greedy_by_row(plant, alpha)
+                    random_greedy_by_row_time_acc += time.time() - start_time
+                    random_greedy_by_row_solutions.append((alpha, random_greedy_by_row_solution))
+
+                    # Random Greedy Global
+                    start_time = time.time()
+                    random_greedy_global_solution = construct.constructor_random_greedy_global(plant, alpha)
+                    random_greedy_global_time_acc += time.time() - start_time
+                    random_greedy_global_solutions.append((alpha, random_greedy_global_solution))
 
                 # Promediar los tiempos para Greedy random by row y Random Greedy
                 greedy_random_by_row_times.append(greedy_random_by_row_time_acc / iteraciones)
-                greedy_random_global.append(greedy_random_global_time_acc / iteraciones)
-                random_greedy_times.append(random_greedy_time_acc / iteraciones)
+                greedy_random_global_times.append(greedy_random_global_time_acc / iteraciones)
+                random_greedy_by_row_times.append(random_greedy_by_row_time_acc / iteraciones)
+                random_greedy_global_times.append(random_greedy_global_time_acc / iteraciones)
 
             # Ejecución del Random
             random_time_acc = 0  # Acumulador de tiempo para Random
@@ -97,16 +107,18 @@ class Metrics:
 
             # Guardar los tiempos en la estructura `times`
             times["greedy_random_by_row"] = greedy_random_by_row_times
-            times["greedy_random_global"] = greedy_random_global
+            times["greedy_random_global"] = greedy_random_global_times
             times["random"] = random_times
-            times["random_greedy"] = random_greedy_times
+            times["random_greedy_by_row"] = random_greedy_by_row_times
+            times["random_greedy_global"] = random_greedy_global_times
 
             # Calcular medias, desviaciones y conteos de best
             all_solution_costs = [guillermo_solution.cost] + \
                                  [solution.cost for solution in random_solutions] + \
                                  [solution.cost for _, solution in greedy_random_by_row_solutions] + \
                                  [solution.cost for _, solution in greedy_random_global_solutions] + \
-                                 [solution.cost for _, solution in random_greedy_solutions]
+                                 [solution.cost for _, solution in random_greedy_by_row_solutions] + \
+                                 [solution.cost for _, solution in random_greedy_global_solutions]
 
             best_cost = min(all_solution_costs)  # Mejor costo global
 
@@ -137,12 +149,20 @@ class Metrics:
                 greedy_random_global_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
 
             # Random Greedy estadísticas
-            random_greedy_avg_costs, random_greedy_std_devs, random_greedy_num_bests = {}, {}, {}
+            random_greedy_by_row_avg_costs, random_greedy_by_row_std_devs, random_greedy_by_row_num_bests = {}, {}, {}
             for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in random_greedy_solutions if a == alpha]
-                random_greedy_avg_costs[alpha] = np.mean(solutions)
-                random_greedy_std_devs[alpha] = calculate_std_dev(solutions)
-                random_greedy_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+                solutions = [solution.cost for a, solution in random_greedy_by_row_solutions if a == alpha]
+                random_greedy_by_row_avg_costs[alpha] = np.mean(solutions)
+                random_greedy_by_row_std_devs[alpha] = calculate_std_dev(solutions)
+                random_greedy_by_row_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+
+            # Random Greedy Global estadísticas
+            random_greedy_global_avg_costs, random_greedy_global_std_devs, random_greedy_global_num_bests = {}, {}, {}
+            for alpha in self.alphas:
+                solutions = [solution.cost for a, solution in random_greedy_global_solutions if a == alpha]
+                random_greedy_global_avg_costs[alpha] = np.mean(solutions)
+                random_greedy_global_std_devs[alpha] = calculate_std_dev(solutions)
+                random_greedy_global_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
 
             # Random estadísticas
             random_costs = [solution.cost for solution in random_solutions]
@@ -157,7 +177,8 @@ class Metrics:
             all_solutions = (
                     [(solution, f"Greedy Random by Row") for _, solution in greedy_random_by_row_solutions] +
                     [(solution, f"Greedy Random Global") for _, solution in greedy_random_global_solutions] +
-                    [(solution, f"Random Greedy") for _, solution in random_greedy_solutions] +
+                    [(solution, f"Random Greedy by Row") for _, solution in random_greedy_by_row_solutions] +
+                    [(solution, f"Random Greedy Global") for _, solution in random_greedy_global_solutions] +
                     [(solution, f"Random") for solution in random_solutions]
             )
             all_solutions.append((guillermo_solution, "Guillermo"))
@@ -279,7 +300,7 @@ class Metrics:
                         "averages": greedy_random_global_avg_costs,  # Coste promedio para cada alfa
                         "std_devs": greedy_random_global_std_devs,  # Desviación estándar para cada alfa
                         "num_bests": greedy_random_global_num_bests,  # Veces que greedy_random_global encuentra la mejor solución para cada alfa
-                        "times": greedy_random_global  # Tiempos promedio por alfa
+                        "times": greedy_random_global_times  # Tiempos promedio por alfa
                     },
                     "random": {
                         "best": min([solution for solution in random_solutions]),
@@ -288,13 +309,19 @@ class Metrics:
                         "num_bests": random_num_bests,  # Veces que Random encuentra la mejor solución
                         "time": times["random"]  # Tiempo promedio
                     },
-                    "random_greedy": {
-                        "best": min([solution for _, solution in random_greedy_solutions]),
-                        "averages": random_greedy_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": random_greedy_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": random_greedy_num_bests,
-                        # Veces que Random Greedy encuentra la mejor solución para cada alfa
-                        "times": random_greedy_times  # Tiempos promedio por alfa
+                    "random_greedy_by_row": {
+                        "best": min([solution for _, solution in random_greedy_by_row_solutions]),
+                        "averages": random_greedy_by_row_avg_costs,  # Coste promedio para cada alfa
+                        "std_devs": random_greedy_by_row_std_devs,  # Desviación estándar para cada alfa
+                        "num_bests": random_greedy_by_row_num_bests, # Veces que Random Greedy encuentra la mejor solución para cada alfa
+                        "times": random_greedy_by_row_times  # Tiempos promedio por alfa
+                    },
+                    "random_greedy_global": {
+                        "best": min([solution for _, solution in random_greedy_global_solutions]),
+                        "averages": random_greedy_global_avg_costs,  # Coste promedio para cada alfa
+                        "std_devs": random_greedy_global_std_devs,  # Desviación estándar para cada alfa
+                        "num_bests": random_greedy_global_num_bests,  # Veces que Random Greedy Global encuentra la mejor solución para cada alfa
+                        "times": random_greedy_global_times  # Tiempos promedio por alfa
                     }
                 },
                 "best_initial": {
@@ -326,8 +353,10 @@ class Metrics:
         headers_general = [
             "Planta", "Constructivo Guillermo (coste)",
             "Constructivo Random (Promedio)",
-            "Constructivo Random Greedy (α=0.25)", "Constructivo Random Greedy (α=0.5)",
-            "Constructivo Random Greedy (α=0.75)", "Constructivo Random Greedy (α=1.0)",
+            "Constructivo Random Greedy by Row (α=0.25)", "Constructivo Random Greedy by Row(α=0.5)",
+            "Constructivo Random Greedy by Row (α=0.75)", "Constructivo Random Greedy by Row(α=1.0)",
+            "Constructivo Random Greedy Global (α=0.25)", "Constructivo Random Greedy Global(α=0.5)",
+            "Constructivo Random Greedy Global (α=0.75)", "Constructivo Random Greedy Global(α=1.0)",
             "Constructivo Greedy Random by Row (α=0.25)", "Constructivo Greedy Random by Row (α=0.5)",
             "Constructivo Greedy Random by Row (α=0.75)", "Constructivo Greedy Random by Row (α=1.0)",
             "Constructivo Greedy Random Global (α=0.25)", "Constructivo Greedy Random Global (α=0.5)",
@@ -342,10 +371,14 @@ class Metrics:
                 plant_name,
                 plant_results["constructors"]["guillermo"]["average"],
                 plant_results["constructors"]["random"]["average"],
-                plant_results["constructors"]["random_greedy"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["random_greedy"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["random_greedy"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["random_greedy"]["averages"].get(1.0, "N/A"),
+                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.25, "N/A"),
+                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.5, "N/A"),
+                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.75, "N/A"),
+                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(1.0, "N/A"),
+                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.25, "N/A"),
+                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.5, "N/A"),
+                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.75, "N/A"),
+                plant_results["constructors"]["random_greedy_global"]["averages"].get(1.0, "N/A"),
                 plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.25, "N/A"),
                 plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.5, "N/A"),
                 plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.75, "N/A"),
@@ -360,7 +393,8 @@ class Metrics:
 
         # Tabla 2: Best constructors
         worksheet = workbook.add_worksheet("Best constructivo")
-        constructores = ["guillermo", "random", "random_greedy", "greedy_random_by_row", "greedy_random_global"]
+        constructores = ["guillermo", "random", "random_greedy_by_row", "random_greedy_global", "greedy_random_by_row", "greedy_random_global"]
+
         headers = ["Instancia"] + constructores + ["Best"]
 
         # Formatos
@@ -686,7 +720,7 @@ class Metrics:
             if key == "constructors":
                 # Procesar constructores como greedy_random_by_row y random_greedy
                 for method_name, method_data in methods.items():
-                    if method_name in ["greedy_random_by_row", "random_greedy", "greedy_random_global"]:
+                    if method_name in ["greedy_random_by_row", "random_greedy_by_row", "greedy_random_global", "random_greedy_global"]:
                         # Procesar métodos con alfas
                         averages = method_data.get("averages", {})
                         if not averages:  # Saltar si no hay datos en "averages"

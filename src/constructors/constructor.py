@@ -3,10 +3,14 @@ import numpy as np
 from typing import List, Tuple
 from src.models.solution import Solution
 from src.models.plant import Plant
-from sklearn.cluster import KMeans
 from copy import deepcopy
 import random
 
+from src.constructors.construct_utils import (
+    calculate_value_distances_length, reorganize_list,
+    build_facilities_by_row, evaluate_best_insertions_in_row,
+    evaluate_best_insertion_candidates, sample_pairs,
+    select_random_candidates)
 
 def construct_random(plant: Plant) -> Solution:
     rows = plant.rows
@@ -64,13 +68,13 @@ def construct_guillermo(plant: Plant) -> Solution:
                 disposition_candidate = []
                 for i in range(rows):
                     facilities_sorted = sorted(
-                        _calculate_value_distances_length(plant, list(disposition_aux[i].items()),
-                                                         factor_length,factor_distances),
+                        calculate_value_distances_length(plant, list(disposition_aux[i].items()),
+                                                         factor_length, factor_distances),
                         key=lambda x: x[1],
                         reverse=order
                     )
                     facilities_sorted = [x[0] for x in facilities_sorted]
-                    facilities_sorted = _reorganize_list(facilities_sorted)
+                    facilities_sorted = reorganize_list(facilities_sorted)
                     disposition_candidate.append(facilities_sorted)
 
                 cost_candidate = plant.evaluator.evaluate(disposition_candidate)
@@ -91,17 +95,19 @@ def constructor_greedy_random_by_row(plant: Plant, alfa: float, sample_size:int=
     order_rows = list(range(rows))
     random.shuffle(order_rows)
 
-    index = 0
-    facilities_by_row = []
-    for capacitiy in plant.capacities:
-        facilities_by_row.append(list(range(index, index + capacitiy)))
-        index += capacitiy
+    facilities_by_row = build_facilities_by_row(plant.capacities)
+
+    for row in order_rows:
+        initial_facility = random.choice(facilities_by_row[row])
+        disposition[row].append(initial_facility)
+        evaluator.push_move(row, initial_facility)
+        facilities_by_row[row].remove(initial_facility)
 
     cost = 0
     for row in order_rows:
         available_facilities = facilities_by_row[row]
 
-        for _ in range(plant.capacities[row]):
+        for _ in range(plant.capacities[row] - 1):
             q = len(available_facilities)
             if q == 0:
                 break
@@ -110,22 +116,16 @@ def constructor_greedy_random_by_row(plant: Plant, alfa: float, sample_size:int=
             else:
                 available_facilities_sample = random.sample(available_facilities, sample_size)
 
-            candidates = []
-            min_cost = float('inf')
-            max_cost = float('-inf')
-            for f in available_facilities_sample:
-                cost = evaluator.cost_if_add(row, f)
-                candidates.append((f, cost))
-                if cost < min_cost: min_cost = cost
-                if cost > max_cost: max_cost = cost
+            candidates = evaluate_best_insertions_in_row(row, available_facilities_sample, disposition, evaluator)
+            costs = [c[1] for c in candidates]
+            min_cost, max_cost = min(costs), max(costs)
 
             threshold = min_cost + alfa * (max_cost - min_cost)
+            rcl = [(f, c, p) for (f, c, p) in candidates if c <= threshold]
 
-            rcl = [(f,c) for (f,c) in candidates if c <= threshold]
-
-            selected_facility = random.choice(rcl)[0]
-            disposition[row].append(selected_facility)
-            evaluator.push_move(row, selected_facility)
+            selected_facility, cost, selected_position = random.choice(rcl)
+            disposition[row].insert(selected_position, selected_facility)
+            evaluator.push_move(row, selected_facility, position=selected_position)
             available_facilities.remove(selected_facility)
 
     return Solution(plant=plant, disposition=disposition, cost = cost)
@@ -136,105 +136,103 @@ def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=
     disposition = [[] for _ in range(rows)]
 
     evaluator.reset()
-    facilities_by_row = []
-    index = 0
-    for capacity in plant.capacities:
-        facilities_by_row.append(list(range(index, index + capacity)))
-        index += capacity
+    facilities_by_row = build_facilities_by_row(plant.capacities)
 
     capacities_remaining = plant.capacities[:]
     cost = 0
 
+    for row in range(rows):
+        initial_facility = random.choice(facilities_by_row[row])
+        disposition[row].append(initial_facility)
+        evaluator.push_move(row, initial_facility)
+        facilities_by_row[row].remove(initial_facility)
+        capacities_remaining[row] -= 1
+
     while any(capacities_remaining):
         rows_with_facilities_remaining = [r for r in range(rows) if facilities_by_row[r]]
-
         if not rows_with_facilities_remaining:
             break
 
-        candidates_sample = _sample_pairs(facilities_by_row, rows_with_facilities_remaining, sample_size)
-
-        min_cost = float('inf')
-        max_cost = float('-inf')
-        candidates = []
-        for (r, f) in candidates_sample:
-            cost = evaluator.cost_if_add(r, f)
-            candidates.append((f, r, cost))
-            if cost < min_cost: min_cost = cost
-            if cost > max_cost: max_cost = cost
+        candidates_sample = sample_pairs(facilities_by_row, rows_with_facilities_remaining, sample_size)
+        candidates = evaluate_best_insertion_candidates(candidates_sample, disposition, evaluator)
+        costs = [c[2] for c in candidates]
+        min_cost = min(costs)
+        max_cost = max(costs)
 
         threshold = min_cost + alfa * (max_cost - min_cost)
 
-        rcl = [(r, f, c) for (r, f, c) in candidates if c <= threshold ]
+        rcl = [(r, f, c, p) for (r, f, c, p) in candidates if c <= threshold ]
 
-        selected_facility, selected_row, _ = random.choice(rcl)
+        selected_facility, selected_row, cost, selected_position = random.choice(rcl)
 
-        disposition[selected_row].append(selected_facility)
-        evaluator.push_move(selected_row, selected_facility)
-
+        disposition[selected_row].insert(selected_position, selected_facility)
+        evaluator.push_move(selected_row, selected_facility, position=selected_position)
         facilities_by_row[selected_row].remove(selected_facility)
         capacities_remaining[selected_row] -= 1
 
     return Solution(plant=plant, disposition=disposition, cost = cost)
 
-def constructor_random_greedy(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
+def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
     evaluator = plant.evaluator
     disposition: List[List[int]] = [[] for _ in range(rows)]
 
     evaluator.reset()
     index = 0
-    facilities_by_row = []
-    for capacitiy in plant.capacities:
-        facilities_by_row.append(list(range(index, index + capacitiy)))
-        index += capacitiy
+    facilities_by_row = build_facilities_by_row(plant.capacities)
+
+    for row in range(rows):
+        random_facility_start = random.choice(facilities_by_row[row])
+        disposition[row].append(random_facility_start)
+        evaluator.push_move(row, random_facility_start)
+        facilities_by_row[row].remove(random_facility_start)
 
     cost = 0
     for row in random.sample(range(rows), rows):
         while facilities_by_row[row]:
 
-            available_facilities = _select_random_candidates(facilities_by_row[row], alfa, sample_size)
-            candidates = []
-            for f in available_facilities:
-                cost = evaluator.cost_if_add(row, f)
-                candidates.append((f, cost))
+            available_facilities = select_random_candidates(facilities_by_row[row], alfa, sample_size)
+            candidates = evaluate_best_insertions_in_row(row, available_facilities, disposition, evaluator)
 
-            selected_candidate, _ = min(candidates, key=lambda x: x[1])
-
-            disposition[row].append(selected_candidate)
-            evaluator.push_move(row, selected_candidate)
-            facilities_by_row[row].remove(selected_candidate)
+            selected_facility, cost, selected_position = min(candidates, key=lambda x: x[1])
+            disposition[row].insert(selected_position, selected_facility)
+            evaluator.push_move(row, selected_facility, position=selected_position)
+            facilities_by_row[row].remove(selected_facility)
 
     return Solution(plant=plant, disposition=disposition, cost = cost)
 
-def _select_random_candidates(row_facilities: List[int], alfa: float, sample_size:int=40) -> List[int]:
-    q = len(row_facilities)
-    if q <= sample_size:
-        return row_facilities
-    num_by_alfa = math.ceil(alfa * q)
-    s = min(num_by_alfa, sample_size)
-    return random.sample(row_facilities, s)
+def constructor_random_greedy_global(plant: Plant, alfa: float, sample_size: int = 40) -> Solution:
+    rows = plant.rows
+    evaluator = plant.evaluator
+    disposition = [[] for _ in range(rows)]
 
-def _calculate_value_distances_length(plant: Plant, facilities: List[Tuple[int, int]], factor_length : float, factor_distances: float) -> List[Tuple[int, float]]:
-    return [
-        (i, (np.sum(plant.matrix[i]) * factor_distances + n * factor_length))
-        for i, n in facilities
-    ]
+    evaluator.reset()
+    facilities_by_row = build_facilities_by_row(plant.capacities)
 
-def _reorganize_list(l: List[int]) -> List[int]:
-    new_list = []
-    for i in range(0, len(l), 2):
-        new_list.append(l[i])
-    for i in range(len(l) - 1 - (len(l) % 2), 0, -2):
-        if i == -1:
-            break
-        new_list.append(l[i])
-    return new_list
+    for row in range(rows):
+        if facilities_by_row[row]:
+            initial_facility = random.choice(facilities_by_row[row])
+            disposition[row].append(initial_facility)
+            evaluator.push_move(row, initial_facility)
+            facilities_by_row[row].remove(initial_facility)
 
-def _sample_pairs(facilities_by_row: List[List[int]], rows: List[int], sample_size: int) -> List[Tuple[int, int]]:
-    all_pairs = [(r, f) for r in rows for f in facilities_by_row[r]]
-    total = len(all_pairs)
-    if total <= sample_size:
-        return all_pairs
-    return random.sample(all_pairs, sample_size)
+    remaining = [(r, f) for r in range(rows) for f in facilities_by_row[r]]
+    cost = 0
+
+    while remaining:
+        q = len(remaining)
+        s = max(1, int(alfa * q))
+        candidates_sample = random.sample(remaining, min(s, sample_size))
+        candidates = evaluate_best_insertion_candidates(candidates_sample, disposition, evaluator)
+
+        # Selección puramente greedy
+        selected_facility, selected_row, cost, selected_position = min(candidates, key=lambda x: x[2])
+
+        disposition[selected_row].insert(selected_position, selected_facility)
+        evaluator.push_move(selected_row, selected_facility, position=selected_position)
+        facilities_by_row[selected_row].remove(selected_facility)
+        remaining.remove((selected_row, selected_facility))
+
+    return Solution(plant=plant, disposition=disposition, cost=cost)
 
 
