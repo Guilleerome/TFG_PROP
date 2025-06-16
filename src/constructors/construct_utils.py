@@ -44,13 +44,14 @@ def build_facilities_by_row(capacities: list[int]) -> list[list[int]]:
         index += capacity
     return facilities_by_row
 
-def select_random_candidates(row_facilities: List[int], alfa: float, sample_size:int=40) -> List[int]:
+def select_random_candidates_random_greedy(row_facilities: List[int], alfa: float, sample_size: int = 40) -> List[int]:
     q = len(row_facilities)
-    if q <= sample_size:
-        return row_facilities
-    num_by_alfa = math.ceil(alfa * q)
-    s = min(num_by_alfa, sample_size)
+    num_by_alfa = max(1, math.ceil(alfa * q))
+    s = min(num_by_alfa, q, sample_size)
     return random.sample(row_facilities, s)
+
+def select_candidates_greedy_random(row_facilities: List[int], sample_size: int = 40) -> List[int]:
+    return row_facilities if len(row_facilities) <= sample_size else random.sample(row_facilities, sample_size)
 
 def calculate_value_distances_length(plant: Plant, facilities: List[Tuple[int, int]], factor_length : float, factor_distances: float) -> List[Tuple[int, float]]:
     return [

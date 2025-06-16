@@ -18,6 +18,8 @@ class Metrics:
         if alphas is None:
             alphas = [0.25, 0.5, 0.75, 1.0]
         self.iterations = iterations
+        if not excel_path.endswith(".xlsx"):
+            excel_path += ".xlsx"
         self.excel_path =  "../results/" + excel_path
         self.alphas = alphas
 

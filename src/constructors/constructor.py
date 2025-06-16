@@ -10,20 +10,17 @@ from src.constructors.construct_utils import (
     calculate_value_distances_length, reorganize_list,
     build_facilities_by_row, evaluate_best_insertions_in_row,
     evaluate_best_insertion_candidates, sample_pairs,
-    select_random_candidates)
+    select_candidates_greedy_random, select_random_candidates_random_greedy)
 
 def construct_random(plant: Plant) -> Solution:
     rows = plant.rows
     n = plant.number
     disposition = []
 
-    capacity = n // rows
-    for i in range(rows):
-        if i == rows - 1:  # If it is the last row, we add the remaining facilities
-            row_facilities = list(range(i * capacity, n))
-        else:
-            row_facilities = list(range(i * capacity, (i + 1) * capacity))
-
+    capacities = plant.capacities
+    facilities = build_facilities_by_row(capacities)
+    for row in range(rows):
+        row_facilities = facilities[row]
         random.shuffle(row_facilities)
         disposition.append(row_facilities)
 
@@ -191,7 +188,7 @@ def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=
     for row in random.sample(range(rows), rows):
         while facilities_by_row[row]:
 
-            available_facilities = select_random_candidates(facilities_by_row[row], alfa, sample_size)
+            available_facilities = select_random_candidates_random_greedy(facilities_by_row[row], alfa, sample_size)
             candidates = evaluate_best_insertions_in_row(row, available_facilities, disposition, evaluator)
 
             selected_facility, cost, selected_position = min(candidates, key=lambda x: x[1])
