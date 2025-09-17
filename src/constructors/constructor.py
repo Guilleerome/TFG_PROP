@@ -133,6 +133,7 @@ def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=
     disposition = [[] for _ in range(rows)]
 
     evaluator.reset()
+
     facilities_by_row = build_facilities_by_row(plant.capacities)
 
     capacities_remaining = plant.capacities[:]
@@ -152,6 +153,7 @@ def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=
 
         candidates_sample = sample_pairs(facilities_by_row, rows_with_facilities_remaining, sample_size)
         candidates = evaluate_best_insertion_candidates(candidates_sample, disposition, evaluator)
+
         costs = [c[2] for c in candidates]
         min_cost = min(costs)
         max_cost = max(costs)
@@ -167,7 +169,7 @@ def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=
         facilities_by_row[selected_row].remove(selected_facility)
         capacities_remaining[selected_row] -= 1
 
-    return Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition)
 
 def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
@@ -302,24 +304,59 @@ def constructor_global_score_ordering(plant: Plant, weight_flows: float = 0.4) -
     evaluator = plant.evaluator
     rows = plant.rows
     disposition = [[] for _ in range(rows)]
-    capacities = plant.capacities[:]
-
-    scores = [(i, weight_flows * sum(plant.matrix[i]) + (1 - weight_flows) * plant.facilities[i]) for i in range(plant.number)]
-    scores.sort(key=lambda x: x[1], reverse=True)
+    facilities_by_row = build_facilities_by_row(plant.capacities)
 
     evaluator.reset()
-    for i, _ in scores:
-        candidate_rows = [r for r in range(rows) if capacities[r] > 0]
-        best_row = min(candidate_rows, key=lambda r: sum(plant.facilities[f] for f in disposition[r]  if isinstance(f, int)))
-        best_pos = 0
-        best_cost = float('inf')
-        for pos in range(len(disposition[best_row]) + 1):
-            cost = evaluator.cost_if_add(best_row, i, pos)
-            if cost < best_cost:
-                best_cost = cost
-                best_pos = pos
-        disposition[best_row].insert(best_pos, i)
-        evaluator.push_move(best_row, i, best_pos)
-        capacities[best_row] -= 1
+    for r in range(rows):
+        scores = [(f, weight_flows * sum(plant.matrix[f]) + (1 - weight_flows) * plant.facilities[f])
+                  for f in facilities_by_row[r]]
+        scores.sort(key=lambda x: x[1], reverse=True)
+
+        for f, _ in scores:
+            best_pos = 0
+            best_cost = float('inf')
+            for pos in range(len(disposition[r]) + 1):
+                cost = evaluator.cost_if_add(r, f, pos)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_pos = pos
+            disposition[r].insert(best_pos, f)
+            evaluator.push_move(r, f, best_pos)
 
     return Solution(plant, disposition)
+
+def constructor_global_score_ordering_random(plant: Plant, weight_flows: float = 0.2, alfa: float = 0.3) -> Solution:
+    evaluator = plant.evaluator
+    rows = plant.rows
+    disposition = [[] for _ in range(rows)]
+    facilities_by_row = build_facilities_by_row(plant.capacities)
+
+    evaluator.reset()
+    for r in range(rows):
+        scores = [(f, weight_flows * sum(plant.matrix[f]) + (1 - weight_flows) * plant.facilities[f])
+                  for f in facilities_by_row[r]]
+        remaining = set(f for f, _ in scores)
+
+        while remaining:
+            candidates = [item for item in scores if item[0] in remaining]
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            top_score = candidates[0][1]
+            bottom_score = candidates[-1][1]
+            threshold = top_score - alfa * (top_score - bottom_score)
+            rcl = [f for f, score in candidates if score >= threshold]
+            selected_facility = random.choice(rcl)
+
+            best_pos = 0
+            best_cost = float('inf')
+            for pos in range(len(disposition[r]) + 1):
+                cost = evaluator.cost_if_add(r, selected_facility, pos)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_pos = pos
+
+            disposition[r].insert(best_pos, selected_facility)
+            evaluator.push_move(r, selected_facility, best_pos)
+            remaining.remove(selected_facility)
+
+    return Solution(plant, disposition)
+
