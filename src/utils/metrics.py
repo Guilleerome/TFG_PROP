@@ -1,11 +1,18 @@
-
 from src.io_instances import instances_reader as ir
 from src.constructors import constructor as construct
 import time
 from src.improvers import local_search as ls
 import xlsxwriter
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import numpy as np
+
+# Abreviaturas para búsquedas locales
+LS_ABBR = {
+    "first_move_swap": "FMS",
+    "best_move_swap": "BMS",
+    "first_move": "FM",
+    "best_move": "BM",
+}
 
 class Metrics:
     def __init__(
@@ -29,11 +36,11 @@ class Metrics:
             self.plants = plants
         self.results: Dict[str, Any] = {}
 
-        inicio = time.time()
+        start = time.time()
         self.run_experiments()
         self.write_results_to_excel()
-        fin = time.time()
-        print(f"Tiempo total de métricas: {fin - inicio:.2f}s")
+        end = time.time()
+        print(f"Total metrics time: {end - start:.2f}s")
 
     def get_alias(self, name: str) -> str:
         constructor_aliases = {
@@ -45,7 +52,8 @@ class Metrics:
             "random_greedy_by_row": "C₅",
             "random_greedy_global": "C₆",
             "random_greedy_row_balanced": "C₇",
-            "global_score_ordering": "C₈"
+            "global_score_ordering": "C₈",
+            "global_score_ordering_random": "C₉",
         }
         if "(α=" in name:
             base, alpha = name.split("(α=")
@@ -60,260 +68,233 @@ class Metrics:
         return f"{constructor_aliases.get(base, base)} {alpha}".strip()
 
     def run_experiments(self):
-        results = {}
         iteraciones = 60
 
         for plant in self.plants:
             print(f"Procesando planta: {plant.name}")
 
-            # Registrar tiempos
-            times = {"Guillermo": [], "random": [], "greedy_random_by_row": [], "greedy_random_global":[],
-                     "random_greedy_by_row": [], "random_greedy_global":[], "greedy_random_row_balanced": [],
-                     "random_greedy_row_balanced": [], "global_score_ordering": [],
-                     "best_initial_solution" : 0, "local_search": {}, "iterative": 0}
+            # Tiempos agregados (medias) por metodo (para tablas agregadas)
+            times = {"Guillermo": 0.0, "random": 0.0, "greedy_random_by_row": [],
+                     "greedy_random_global": [], "greedy_random_row_balanced": [],
+                     "random_greedy_by_row": [], "random_greedy_global": [],
+                     "random_greedy_row_balanced": [], "global_score_ordering": 0.0,
+                     "global_score_ordering_random": []}
 
+            # --- Constructores deterministas con tiempo por ejecución ---
             start_time = time.time()
             guillermo_solution = construct.construct_guillermo(plant)
-            times["Guillermo"] = (time.time() - start_time)
+            guillermo_time = time.time() - start_time
+            times["Guillermo"] = guillermo_time
 
-            # Greedy random by row con diferentes valores de alfa y tiempos
-            (greedy_random_by_row_solutions, greedy_random_global_solutions, global_score_ordering_solutions,
-             random_solutions, random_greedy_by_row_solutions, random_greedy_global_solutions,
-             greedy_random_row_balanced_solutions, random_greedy_row_balanced_solutions) = [], [], [], [], [], [], [], []
-            (greedy_random_by_row_times, greedy_random_global_times, random_times, global_score_ordering_times,
-             random_greedy_by_row_times, random_greedy_global_times,
-             greedy_random_row_balanced_times, random_greedy_row_balanced_times) = [], [], [], [], [], [], [], []
+            start_time = time.time()
+            global_score_ordering_solution = construct.constructor_global_score_ordering(plant, 0.2)
+            gso_time = time.time() - start_time
+            times["global_score_ordering"] = gso_time
+
+            # Acumuladores por corrida (guardamos (alpha, solution, build_time))
+            greedy_random_by_row_runs: List[Tuple[float, Any, float]] = []
+            greedy_random_global_runs: List[Tuple[float, Any, float]] = []
+            greedy_random_row_balanced_runs: List[Tuple[float, Any, float]] = []
+            random_greedy_by_row_runs: List[Tuple[float, Any, float]] = []
+            random_greedy_global_runs: List[Tuple[float, Any, float]] = []
+            random_greedy_row_balanced_runs: List[Tuple[float, Any, float]] = []
+            gso_random_runs: List[Tuple[float, Any, float]] = []
+            random_runs: List[Tuple[Any, float]] = []
+
+            # Acumuladores de tiempo promedio por alpha
+            greedy_random_by_row_times = []
+            greedy_random_global_times = []
+            greedy_random_row_balanced_times = []
+            random_greedy_by_row_times = []
+            random_greedy_global_times = []
+            random_greedy_row_balanced_times = []
+            gso_random_times = []
 
             for alpha in self.alphas:
-                greedy_random_by_row_time_acc = 0  # Acumulador de tiempo para Greedy random by row
-                greedy_random_global_time_acc = 0  # Acumulador de tiempo para Greedy random global
-                greedy_random_row_balanced_time_acc = 0 # Acumulador de tiempo para Greedy random row balanced
-                random_greedy_by_row_time_acc = 0  # Acumulador de tiempo para Random Greedy by row
-                random_greedy_global_time_acc = 0  # Acumulador de tiempo para Random Greedy Global
-                random_greedy_row_balanced_time_acc = 0 # Acumulador de tiempo para Random Greedy Row Balanced
-                global_score_ordering_times_acc = 0 # Acumulador de tiempo para Global Score Ordering
+                t_grbr_acc = 0.0
+                t_grg_acc = 0.0
+                t_grrb_acc = 0.0
+                t_rgb_acc = 0.0
+                t_rgg_acc = 0.0
+                t_rgrb_acc = 0.0
+                t_gsor_acc = 0.0
 
                 for _ in range(iteraciones):
                     # Greedy random by row
                     start_time = time.time()
-                    greedy_random_by_row_solution = construct.constructor_greedy_random_by_row(plant, alpha)
-                    greedy_random_by_row_time_acc += time.time() - start_time
-                    greedy_random_by_row_solutions.append((alpha, greedy_random_by_row_solution))
+                    sol_aux = construct.constructor_greedy_random_by_row(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_grbr_acc += elapsed
+                    greedy_random_by_row_runs.append((alpha, sol_aux, elapsed))
 
                     # Greedy random global
                     start_time = time.time()
-                    greedy_random_global_solution = construct.constructor_greedy_random_global(plant, alpha)
-                    greedy_random_global_time_acc += time.time() - start_time
-                    greedy_random_global_solutions.append((alpha, greedy_random_global_solution))
+                    sol_aux = construct.constructor_greedy_random_global(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_grg_acc += elapsed
+                    greedy_random_global_runs.append((alpha, sol_aux, elapsed))
 
                     # Greedy random row balanced
                     start_time = time.time()
-                    greedy_random_row_balanced_solution = construct.constructor_greedy_random_row_balanced(plant, alpha)
-                    greedy_random_row_balanced_time_acc += time.time() - start_time
-                    greedy_random_row_balanced_solutions.append((alpha, greedy_random_row_balanced_solution))
+                    sol_aux = construct.constructor_greedy_random_row_balanced(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_grrb_acc += elapsed
+                    greedy_random_row_balanced_runs.append((alpha, sol_aux, elapsed))
 
-                    # Random Greedy
+                    # Random Greedy by row
                     start_time = time.time()
-                    random_greedy_by_row_solution = construct.constructor_random_greedy_by_row(plant, alpha)
-                    random_greedy_by_row_time_acc += time.time() - start_time
-                    random_greedy_by_row_solutions.append((alpha, random_greedy_by_row_solution))
+                    sol_aux = construct.constructor_random_greedy_by_row(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_rgb_acc += elapsed
+                    random_greedy_by_row_runs.append((alpha, sol_aux, elapsed))
 
-                    # Random Greedy Global
+                    # Random Greedy global
                     start_time = time.time()
-                    random_greedy_global_solution = construct.constructor_random_greedy_global(plant, alpha)
-                    random_greedy_global_time_acc += time.time() - start_time
-                    random_greedy_global_solutions.append((alpha, random_greedy_global_solution))
+                    sol_aux = construct.constructor_random_greedy_global(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_rgg_acc += elapsed
+                    random_greedy_global_runs.append((alpha, sol_aux, elapsed))
 
-                    # Random Greedy Row Balanced
+                    # Random Greedy row balanced
                     start_time = time.time()
-                    random_greedy_row_balanced_solution = construct.constructor_random_greedy_row_balanced(plant, alpha)
-                    random_greedy_row_balanced_time_acc += time.time() - start_time
-                    random_greedy_row_balanced_solutions.append((alpha, random_greedy_row_balanced_solution))
+                    sol_aux = construct.constructor_random_greedy_row_balanced(plant, alpha)
+                    elapsed = time.time() - start_time
+                    t_rgrb_acc += elapsed
+                    random_greedy_row_balanced_runs.append((alpha, sol_aux, elapsed))
 
-                    # Global Score Ordering
+                    # Global Score Ordering Random
                     start_time = time.time()
-                    global_score_ordering_solution = construct.constructor_global_score_ordering(plant, alpha)
-                    global_score_ordering_times_acc += time.time() - start_time
-                    global_score_ordering_solutions.append((alpha, global_score_ordering_solution))
+                    sol_aux = construct.constructor_global_score_ordering_random(plant, alfa=alpha)
+                    elapsed = time.time() - start_time
+                    t_gsor_acc += elapsed
+                    gso_random_runs.append((alpha, sol_aux, elapsed))
 
-                # Promediar los tiempos para Greedy random by row y Random Greedy
-                greedy_random_by_row_times.append(greedy_random_by_row_time_acc / iteraciones)
-                greedy_random_global_times.append(greedy_random_global_time_acc / iteraciones)
-                greedy_random_row_balanced_times.append(greedy_random_row_balanced_time_acc / iteraciones)
-                random_greedy_by_row_times.append(random_greedy_by_row_time_acc / iteraciones)
-                random_greedy_global_times.append(random_greedy_global_time_acc / iteraciones)
-                random_greedy_row_balanced_times.append(random_greedy_row_balanced_time_acc / iteraciones)
-                global_score_ordering_times.append(global_score_ordering_times_acc / iteraciones)
+                greedy_random_by_row_times.append(t_grbr_acc / iteraciones)
+                greedy_random_global_times.append(t_grg_acc / iteraciones)
+                greedy_random_row_balanced_times.append(t_grrb_acc / iteraciones)
+                random_greedy_by_row_times.append(t_rgb_acc / iteraciones)
+                random_greedy_global_times.append(t_rgg_acc / iteraciones)
+                random_greedy_row_balanced_times.append(t_rgrb_acc / iteraciones)
+                gso_random_times.append(t_gsor_acc / iteraciones)
 
-            # Ejecución del Random
-            random_time_acc = 0  # Acumulador de tiempo para Random
-
+            # Random puro (guardamos tiempo por cada ejecución)
+            random_time_acc = 0.0
             for _ in range(self.iterations):
                 start_time = time.time()
-                random_solution = construct.construct_random(plant)
-                random_time_acc += time.time() - start_time
-                random_solutions.append(random_solution)
+                sol_aux = construct.construct_random(plant)
+                elapsed = time.time() - start_time
+                random_time_acc += elapsed
+                random_runs.append((sol_aux, elapsed))
+            random_avg_time = random_time_acc / iteraciones
 
-            # Promedio de tiempo para Random
-            random_times = random_time_acc / iteraciones
-
-            # Guardar los tiempos en la estructura `times`
-            times["random"] = random_times
+            # Guardar medias de tiempo por metodo
+            times["random"] = random_avg_time
             times["greedy_random_by_row"] = greedy_random_by_row_times
             times["greedy_random_global"] = greedy_random_global_times
             times["greedy_random_row_balanced"] = greedy_random_row_balanced_times
             times["random_greedy_by_row"] = random_greedy_by_row_times
             times["random_greedy_global"] = random_greedy_global_times
             times["random_greedy_row_balanced"] = random_greedy_row_balanced_times
-            times["global_score_ordering"] = global_score_ordering_times
+            times["global_score_ordering_random"] = gso_random_times
 
-            # Calcular medias, desviaciones y conteos de best
-            all_solution_costs = [guillermo_solution.cost] + \
-                                 [solution.cost for solution in random_solutions] + \
-                                 [solution.cost for _, solution in greedy_random_by_row_solutions] + \
-                                 [solution.cost for _, solution in greedy_random_global_solutions] + \
-                                 [solution.cost for _, solution in greedy_random_row_balanced_solutions] + \
-                                 [solution.cost for _, solution in random_greedy_by_row_solutions] + \
-                                 [solution.cost for _, solution in random_greedy_global_solutions] + \
-                                 [solution.cost for _, solution in random_greedy_row_balanced_solutions] + \
-                                 [solution.cost for _, solution in global_score_ordering_solutions]
+            # Métricas de costes para calcular best
+            all_solution_costs = [guillermo_solution.cost,
+                                  global_score_ordering_solution.cost] + \
+                                 [s.cost for (s, _) in random_runs] + \
+                                 [s.cost for (_, s, _) in greedy_random_by_row_runs] + \
+                                 [s.cost for (_, s, _) in greedy_random_global_runs] + \
+                                 [s.cost for (_, s, _) in greedy_random_row_balanced_runs] + \
+                                 [s.cost for (_, s, _) in random_greedy_by_row_runs] + \
+                                 [s.cost for (_, s, _) in random_greedy_global_runs] + \
+                                 [s.cost for (_, s, _) in random_greedy_row_balanced_runs] + \
+                                 [s.cost for (_, s, _) in gso_random_runs]
 
-            best_cost = min(all_solution_costs)  # Mejor costo global
+            best_cost = min(all_solution_costs)
 
-            def calculate_std_dev(solutions):
-                std_devs = [solution / best_cost for solution in solutions]
-                mean_std_devs = np.mean(std_devs)
-                return mean_std_devs
+            def calculate_std_dev(solutions_costs):
+                std_devs = [c / best_cost for c in solutions_costs]
+                return float(np.mean(std_devs))
 
-            # Guillermo estadísticas
+            # Deterministas
             guillermo_avg_cost = guillermo_solution.cost
             guillermo_std_dev = calculate_std_dev([guillermo_solution.cost])
             guillermo_num_bests = 1 if guillermo_solution.cost == best_cost else 0
 
-            # Greedy random by row estadísticas
-            greedy_random_by_row_avg_costs, greedy_random_by_row_std_devs, greedy_random_by_row_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in greedy_random_by_row_solutions if a == alpha]
-                greedy_random_by_row_avg_costs[alpha] = np.mean(solutions)
-                greedy_random_by_row_std_devs[alpha] = calculate_std_dev(solutions)
-                greedy_random_by_row_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+            gso_avg_cost = global_score_ordering_solution.cost
+            gso_std_dev = calculate_std_dev([global_score_ordering_solution.cost])
+            gso_num_bests = 1 if global_score_ordering_solution.cost == best_cost else 0
 
-            # Greedy random global estadísticas
-            greedy_random_global_avg_costs, greedy_random_global_std_devs, greedy_random_global_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in greedy_random_global_solutions if a == alpha]
-                greedy_random_global_avg_costs[alpha] = np.mean(solutions)
-                greedy_random_global_std_devs[alpha] = calculate_std_dev(solutions)
-                greedy_random_global_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+            # Agregadores (promedios por alpha)
+            def collect_alpha_stats(runs: List[Tuple[float, Any, float]]):
+                avg_costs, std_devs, num_bests = {}, {}, {}
+                for alpha in self.alphas:
+                    solutions_costs = [sol.cost for (a, sol, _) in runs if a == alpha]
+                    if solutions_costs:
+                        avg_costs[alpha] = float(np.mean(solutions_costs))
+                        std_devs[alpha] = calculate_std_dev(solutions_costs)
+                        num_bests[alpha] = sum(1 for c in solutions_costs if c == best_cost)
+                return avg_costs, std_devs, num_bests
 
-            # Greedy random row balanced estadísticas
-            greedy_random_row_balanced_avg_costs, greedy_random_row_balanced_std_devs, greedy_random_row_balanced_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in greedy_random_row_balanced_solutions if a == alpha]
-                greedy_random_row_balanced_avg_costs[alpha] = np.mean(solutions)
-                greedy_random_row_balanced_std_devs[alpha] = calculate_std_dev(solutions)
-                greedy_random_row_balanced_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+            grbr_avg, grbr_std, grbr_bests = collect_alpha_stats(greedy_random_by_row_runs)
+            grg_avg, grg_std, grg_bests = collect_alpha_stats(greedy_random_global_runs)
+            grrb_avg, grrb_std, grrb_bests = collect_alpha_stats(greedy_random_row_balanced_runs)
+            rgb_avg, rgb_std, rgb_bests = collect_alpha_stats(random_greedy_by_row_runs)
+            rgg_avg, rgg_std, rgg_bests = collect_alpha_stats(random_greedy_global_runs)
+            rgrb_avg, rgrb_std, rgrb_bests = collect_alpha_stats(random_greedy_row_balanced_runs)
+            gsor_avg, gsor_std, gsor_bests = collect_alpha_stats(gso_random_runs)
 
-            # Random Greedy estadísticas
-            random_greedy_by_row_avg_costs, random_greedy_by_row_std_devs, random_greedy_by_row_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in random_greedy_by_row_solutions if a == alpha]
-                random_greedy_by_row_avg_costs[alpha] = np.mean(solutions)
-                random_greedy_by_row_std_devs[alpha] = calculate_std_dev(solutions)
-                random_greedy_by_row_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
+            random_costs = [s.cost for (s, _) in random_runs]
+            random_avg_cost = float(np.mean(random_costs)) if random_costs else 0.0
+            random_std_dev = calculate_std_dev(random_costs) if random_costs else 0.0
+            random_num_bests = sum(1 for c in random_costs if c == best_cost)
 
-            # Random Greedy Global estadísticas
-            random_greedy_global_avg_costs, random_greedy_global_std_devs, random_greedy_global_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in random_greedy_global_solutions if a == alpha]
-                random_greedy_global_avg_costs[alpha] = np.mean(solutions)
-                random_greedy_global_std_devs[alpha] = calculate_std_dev(solutions)
-                random_greedy_global_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
-
-            # Random Greedy Row Balanced estadísticas
-            random_greedy_row_balanced_avg_costs, random_greedy_row_balanced_std_devs, random_greedy_row_balanced_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in random_greedy_row_balanced_solutions if a == alpha]
-                random_greedy_row_balanced_avg_costs[alpha] = np.mean(solutions)
-                random_greedy_row_balanced_std_devs[alpha] = calculate_std_dev(solutions)
-                random_greedy_row_balanced_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
-
-            # Global Score Ordering estadísticas
-            global_score_ordering_avg_costs, global_score_ordering_std_devs, global_score_ordering_num_bests = {}, {}, {}
-            for alpha in self.alphas:
-                solutions = [solution.cost for a, solution in global_score_ordering_solutions if a == alpha]
-                global_score_ordering_avg_costs[alpha] = np.mean(solutions)
-                global_score_ordering_std_devs[alpha] = calculate_std_dev(solutions)
-                global_score_ordering_num_bests[alpha] = sum(1 for cost in solutions if cost == best_cost)
-
-            # Random estadísticas
-            random_costs = [solution.cost for solution in random_solutions]
-            random_avg_cost = np.mean(random_costs)
-            random_std_dev = calculate_std_dev(random_costs)
-            random_num_bests = sum(1 for cost in random_costs if cost == best_cost)
-
-            # Seleccionar mejor solución inicial
-            start_time = time.time()
-
-            # Crear una lista extendida con información de origen para cada solución
+            # ---- Selección de mejores soluciones iniciales (con tiempo de construcción asociado) ----
             all_solutions = (
-                    [(solution, f"Greedy Random by Row") for _, solution in greedy_random_by_row_solutions] +
-                    [(solution, f"Greedy Random Global") for _, solution in greedy_random_global_solutions] +
-                    [(solution, f"Greedy Random Row Balanced") for _, solution in greedy_random_row_balanced_solutions] +
-                    [(solution, f"Random Greedy by Row") for _, solution in random_greedy_by_row_solutions] +
-                    [(solution, f"Random Greedy Global") for _, solution in random_greedy_global_solutions] +
-                    [(solution, f"Random Greedy Row Balanced") for _, solution in random_greedy_row_balanced_solutions] +
-                    [(solution, f"Global Score Ordering") for _, solution in global_score_ordering_solutions] +
-                    [(solution, f"Random") for solution in random_solutions]
+                [ (s, "Greedy Random by Row", t) for (a, s, t) in greedy_random_by_row_runs ] +
+                [ (s, "Greedy Random Global", t) for (a, s, t) in greedy_random_global_runs ] +
+                [ (s, "Greedy Random Row Balanced", t) for (a, s, t) in greedy_random_row_balanced_runs ] +
+                [ (s, "Random Greedy by Row", t) for (a, s, t) in random_greedy_by_row_runs ] +
+                [ (s, "Random Greedy Global", t) for (a, s, t) in random_greedy_global_runs ] +
+                [ (s, "Random Greedy Row Balanced", t) for (a, s, t) in random_greedy_row_balanced_runs ] +
+                [ (s, "Global Score Ordering Random", t) for (a, s, t) in gso_random_runs ] +
+                [ (s, "Random", t) for (s, t) in random_runs ]
             )
-            all_solutions.append((guillermo_solution, "Guillermo"))
-            # Ordenar las soluciones por costo
-            all_solutions_sorted = sorted(all_solutions, key=lambda s: s[0].cost)
+            all_solutions += [(guillermo_solution, "Guillermo", guillermo_time)]
+            all_solutions += [(global_score_ordering_solution, "Global Score Ordering", gso_time)]
 
-            # Seleccionar las mejores soluciones, incluyendo empates
+            all_solutions_sorted = sorted(all_solutions, key=lambda x: x[0].cost)
+
             best_solutions = []
-            ordinal_map = ["1º", "2º", "3º"]  # Mapear posiciones ordinales
+            ordinal_map = ["1st", "2nd", "3rd"]
             current_rank = 0
 
-            for solution, origin in all_solutions_sorted:
-                if not best_solutions or solution.cost == best_solutions[-1][0].cost:
-                    # Si la lista está vacía o el costo es igual al último agregado
+            for (sol, origin, build_t) in all_solutions_sorted:
+                if not best_solutions or sol.cost == best_solutions[-1][0].cost:
                     if len(best_solutions) < len(ordinal_map):
-                        best_solutions.append((solution, origin, ordinal_map[current_rank]))
+                        best_solutions.append((sol, origin, ordinal_map[current_rank], build_t))
                 else:
-                    # Si el costo es diferente, avanzar al siguiente ordinal
                     if current_rank < len(ordinal_map) - 1:
                         current_rank += 1
-                        best_solutions.append((solution, origin, ordinal_map[current_rank]))
-                # Si hemos llenado todas las posiciones posibles, detener
+                        best_solutions.append((sol, origin, ordinal_map[current_rank], build_t))
                 if len(best_solutions) == len(ordinal_map):
                     break
 
-            # Verificar si `guillermo_solution` está entre las mejores
-            guillermo_in_best = any(sol == guillermo_solution for sol, _, _ in best_solutions)
-            if not guillermo_in_best:
-                # Identificar el ordinal de la última posición en ordinal_map
-                last_position = ordinal_map[-1]
+            # Garantizar que Guillermo aparece si no está
+            if not any(sol == guillermo_solution for (sol, _, _, _) in best_solutions):
+                last_pos = ordinal_map[-1]
+                best_solutions = [(s, o, rk, bt) for (s, o, rk, bt) in best_solutions if rk != last_pos]
+                best_solutions.append((guillermo_solution, "Guillermo", ordinal_map[current_rank], guillermo_time))
 
-                # Remover cualquier solución que esté actualmente en esa última posición
-                best_solutions = [
-                    (sol, orig, rank)
-                    for sol, orig, rank in best_solutions
-                    if rank != last_position
-                ]
-                best_solutions.append((guillermo_solution, "Guillermo", ordinal_map[current_rank]))
+            # Estructura de entradas para hoja general y para poder sumar tiempos en LS
+            best_initial_entries = [
+                {"origin": origin, "rank": rank, "cost": sol.cost, "build_time": build_t,
+                 "name": f"{origin} ({rank})"}  # name clave para mapping
+                for (sol, origin, rank, build_t) in best_solutions
+            ]
 
-            # Crear nombres con la posición correspondiente
-            best_solutions_named = {
-                f"{origin} ({position})": solution for solution, origin, position in best_solutions
-            }
-
-            end_time = time.time()
-            times["best_initial_solution"] = end_time - start_time
-
-            # Ejecutar búsquedas locales por separado sobre las mejores soluciones
-            local_search_results = {}
-            extended_local_search_results = {}
+            # ---- Búsquedas locales (individuales y combinadas) con total_time = build_time + ls_time ----
+            local_search_results: Dict[str, Dict[str, Dict[str, float]]] = {}
+            extended_local_search_results: Dict[str, Dict[str, Dict[str, float]]] = {}
 
             local_search_methods = {
                 "first_move_swap": ls.first_move_swap,
@@ -322,18 +303,25 @@ class Metrics:
                 "best_move": ls.best_move
             }
 
-            # Ejecutar búsquedas locales individuales sobre cada solución en las mejores soluciones
-            for name, solution in best_solutions_named.items():
-                local_search_results[name] = {}
+            # Mapa: nombre de solución inicial -> tiempo de construcción
+            ctor_time_by_name = {e["name"]: e["build_time"] for e in best_initial_entries}
+
+            # Individual
+            for (sol, origin, rank, build_t) in best_solutions:
+                sol_name = f"{origin} ({rank})"
+                local_search_results[sol_name] = {}
                 for key, method in local_search_methods.items():
                     start_time = time.time()
-                    result = method(solution)
-                    local_search_results[name][key] = {
+                    result = method(sol)
+                    ls_elapsed = time.time() - start_time
+                    total_time = build_t + ls_elapsed
+                    local_search_results[sol_name][key] = {
                         "cost": result.cost,
-                        "time": time.time() - start_time
+                        "time": ls_elapsed,
+                        "total_time": total_time
                     }
 
-            # Ejecutar combinaciones de búsquedas locales
+            # Combinadas
             valid_combinations = [
                 ("first_move", "first_move_swap"),
                 ("first_move", "best_move_swap"),
@@ -344,101 +332,114 @@ class Metrics:
                 ("best_move_swap", "first_move"),
                 ("best_move_swap", "best_move")
             ]
-
-            for name, solution in best_solutions_named.items():
-                extended_local_search_results[name] = {}
+            for (sol, origin, rank, build_t) in best_solutions:
+                sol_name = f"{origin} ({rank})"
+                extended_local_search_results[sol_name] = {}
                 for combo in valid_combinations:
                     start_time = time.time()
-
-                    intermediate_result = local_search_methods[combo[0]](solution)
-                    final_result = local_search_methods[combo[1]](intermediate_result)
-
-                    extended_local_search_results[name][" -> ".join(combo)] = {
-                        "cost": final_result.cost,
-                        "time": time.time() - start_time
+                    inter = local_search_methods[combo[0]](sol)
+                    final = local_search_methods[combo[1]](inter)
+                    ls_elapsed = time.time() - start_time
+                    total_time = build_t + ls_elapsed
+                    combo_label = f"{LS_ABBR[combo[0]]} \u2192 {LS_ABBR[combo[1]]}"
+                    extended_local_search_results[sol_name][combo_label] = {
+                        "cost": final.cost,
+                        "time": ls_elapsed,
+                        "total_time": total_time
                     }
 
-            # # Iterative Local Search con tiempo
-            # start_time = time.time()
-            # final_best_solution = iterative_local_search(plant, best_initial_solution)
-            # times["iterative"] = time.time() - start_time
+            # ---- Guardar resultados por instancia ----
+            # Utilidades para obtener mejor solución y su tiempo de construcción por constructor:
+            def best_of_runs(runs_list: List[Tuple[float, Any, float]]) -> Tuple[Any, float]:
+                if not runs_list:
+                    return None, 0.0
+                best_tuple = min(runs_list, key=lambda x: x[1].cost)  # (alpha, sol, time)
+                return best_tuple[1], best_tuple[2]
 
-            # Registrar resultados en un diccionario
+            def best_of_random_runs(runs_list: List[Tuple[Any, float]]) -> Tuple[Any, float]:
+                if not runs_list:
+                    return None, 0.0
+                best_tuple = min(runs_list, key=lambda x: x[0].cost)  # (sol, time)
+                return best_tuple[0], best_tuple[1]
+
+            grbr_best, grbr_best_time = best_of_runs(greedy_random_by_row_runs)
+            grg_best, grg_best_time = best_of_runs(greedy_random_global_runs)
+            grrb_best, grrb_best_time = best_of_runs(greedy_random_row_balanced_runs)
+            rgb_best, rgb_best_time = best_of_runs(random_greedy_by_row_runs)
+            rgg_best, rgg_best_time = best_of_runs(random_greedy_global_runs)
+            rgrb_best, rgrb_best_time = best_of_runs(random_greedy_row_balanced_runs)
+            gsor_best, gsor_best_time = best_of_runs(gso_random_runs)
+            random_best, random_best_time = best_of_random_runs(random_runs)
+
             self.results[plant.name] = {
                 "constructors": {
                     "guillermo": {
                         "best": guillermo_solution,
+                        "best_time": guillermo_time,
                         "average": guillermo_avg_cost,
                         "std_devs": guillermo_std_dev,
                         "num_bests": guillermo_num_bests,
                         "time": times["Guillermo"]
                     },
+                    "global_score_ordering": {
+                        "best": global_score_ordering_solution,
+                        "best_time": gso_time,
+                        "average": gso_avg_cost,
+                        "std_devs": gso_std_dev,
+                        "num_bests": gso_num_bests,
+                        "time": times["global_score_ordering"]
+                    },
                     "random": {
-                        "best": min([solution for solution in random_solutions]),
-                        "average": random_avg_cost,  # Coste promedio
-                        "std_devs": random_std_dev,  # Desviación estándar
-                        "num_bests": random_num_bests,  # Veces que Random encuentra la mejor solución
-                        "time": times["random"]  # Tiempo promedio
+                        "best": random_best,
+                        "best_time": random_best_time,
+                        "average": random_avg_cost,
+                        "std_devs": random_std_dev,
+                        "num_bests": random_num_bests,
+                        "time": times["random"]
                     },
                     "greedy_random_by_row": {
-                        "best": min([solution for _, solution in greedy_random_by_row_solutions]),
-                        "averages": greedy_random_by_row_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": greedy_random_by_row_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": greedy_random_by_row_num_bests,  # Veces que greedy_random_by_row encuentra la mejor solución para cada alfa
-                        "times": greedy_random_by_row_times  # Tiempos promedio por alfa
+                        "best": grbr_best, "best_time": grbr_best_time,
+                        "averages": grbr_avg, "std_devs": grbr_std, "num_bests": grbr_bests,
+                        "times": times["greedy_random_by_row"]
                     },
                     "greedy_random_global": {
-                        "best": min([solution for _, solution in greedy_random_global_solutions]),
-                        "averages": greedy_random_global_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": greedy_random_global_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": greedy_random_global_num_bests,  # Veces que greedy_random_global encuentra la mejor solución para cada alfa
-                        "times": greedy_random_global_times  # Tiempos promedio por alfa
+                        "best": grg_best, "best_time": grg_best_time,
+                        "averages": grg_avg, "std_devs": grg_std, "num_bests": grg_bests,
+                        "times": times["greedy_random_global"]
                     },
                     "greedy_random_row_balanced": {
-                        "best": min([solution for _, solution in greedy_random_row_balanced_solutions]),
-                        "averages": greedy_random_row_balanced_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": greedy_random_row_balanced_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": greedy_random_row_balanced_num_bests,  # Veces que greedy_random_row_balanced encuentra la mejor solución para cada alfa
-                        "times": greedy_random_row_balanced_times  # Tiempos promedio por alfa
+                        "best": grrb_best, "best_time": grrb_best_time,
+                        "averages": grrb_avg, "std_devs": grrb_std, "num_bests": grrb_bests,
+                        "times": times["greedy_random_row_balanced"]
                     },
                     "random_greedy_by_row": {
-                        "best": min([solution for _, solution in random_greedy_by_row_solutions]),
-                        "averages": random_greedy_by_row_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": random_greedy_by_row_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": random_greedy_by_row_num_bests, # Veces que Random Greedy encuentra la mejor solución para cada alfa
-                        "times": random_greedy_by_row_times  # Tiempos promedio por alfa
+                        "best": rgb_best, "best_time": rgb_best_time,
+                        "averages": rgb_avg, "std_devs": rgb_std, "num_bests": rgb_bests,
+                        "times": times["random_greedy_by_row"]
                     },
                     "random_greedy_global": {
-                        "best": min([solution for _, solution in random_greedy_global_solutions]),
-                        "averages": random_greedy_global_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": random_greedy_global_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": random_greedy_global_num_bests,  # Veces que Random Greedy Global encuentra la mejor solución para cada alfa
-                        "times": random_greedy_global_times  # Tiempos promedio por alfa
+                        "best": rgg_best, "best_time": rgg_best_time,
+                        "averages": rgg_avg, "std_devs": rgg_std, "num_bests": rgg_bests,
+                        "times": times["random_greedy_global"]
                     },
                     "random_greedy_row_balanced": {
-                        "best": min([solution for _, solution in random_greedy_row_balanced_solutions]),
-                        "averages": random_greedy_row_balanced_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": random_greedy_row_balanced_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": random_greedy_row_balanced_num_bests,  # Veces que Random Greedy Row Balanced encuentra la mejor solución para cada alfa
-                        "times": random_greedy_row_balanced_times  # Tiempos promedio por alfa
+                        "best": rgrb_best, "best_time": rgrb_best_time,
+                        "averages": rgrb_avg, "std_devs": rgrb_std, "num_bests": rgrb_bests,
+                        "times": times["random_greedy_row_balanced"]
                     },
-                    "global_score_ordering": {
-                        "best": min([solution for _, solution in global_score_ordering_solutions]),
-                        "averages": global_score_ordering_avg_costs,  # Coste promedio para cada alfa
-                        "std_devs": global_score_ordering_std_devs,  # Desviación estándar para cada alfa
-                        "num_bests": global_score_ordering_num_bests,  # Veces que Global Score Ordering encuentra la mejor solución para cada alfa
-                        "times": global_score_ordering_times  # Tiempos promedio por alfa
+                    "global_score_ordering_random": {
+                        "best": gsor_best, "best_time": gsor_best_time,
+                        "averages": gsor_avg, "std_devs": gsor_std, "num_bests": gsor_bests,
+                        "times": times["global_score_ordering_random"]
                     }
                 },
                 "best_initial": {
-                    "solutions": [sol.cost for sol, _, _ in best_solutions],  # Costes de las mejores soluciones iniciales
-                    "time": times["best_initial_solution"]  # Tiempo para determinar las mejores soluciones iniciales
+                    "entries": best_initial_entries  # contiene build_time
                 },
                 "local_search": {
-                    "individual": local_search_results,  # Resultados de búsquedas locales individuales
-                    "extended": extended_local_search_results  # Resultados de combinaciones de búsquedas locales
-                },
-                "times": times  # Todos los tiempos de ejecución registrados
+                    "individual": local_search_results,        # cada metodo: cost, time, total_time
+                    "extended": extended_local_search_results  # cada combo: cost, time, total_time
+                }
             }
 
     def write_results_to_excel(self):
@@ -448,375 +449,375 @@ class Metrics:
         # Formatos
         header_format = workbook.add_format({"bold": True, "bg_color": "#D7E4BC", "border": 1, "align": "center"})
         cell_format = workbook.add_format({"border": 1})
+        cell_center = workbook.add_format({"border": 1, "align": "center"})
         cell_wrap_format = workbook.add_format({"border": 1})
         bold_format = workbook.add_format({"bold": True})
         default_column_width = 25
 
-        # Tabla 1: Resultados generales por planta
-        worksheet_general = workbook.add_worksheet("Resultados Generales")
-        headers_general = [
-            "Planta", f"Constructivo {self.get_alias('guillermo')} (coste)",
-            f"Constructivo {self.get_alias('random')} (Promedio)",
-            f"Constructivo {self.get_alias('greedy_random_by_row (α=0.25)')}", f"Constructivo {self.get_alias('greedy_random_by_row (α=0.5)')}",
-            f"Constructivo {self.get_alias('greedy_random_by_row (α=0.75)')}", f"Constructivo {self.get_alias('greedy_random_by_row (α=1.0)')}",
-            f"Constructivo {self.get_alias('greedy_random_global (α=0.25)')}", f"Constructivo {self.get_alias('greedy_random_global (α=0.5)')}",
-            f"Constructivo {self.get_alias('greedy_random_global (α=0.75)')}", f"Constructivo {self.get_alias('greedy_random_global (α=1.0)')}",
-            f"Constructivo {self.get_alias('greedy_random_row_balanced (α=0.25)')}", f"Constructivo {self.get_alias('greedy_random_row_balanced (α=0.5)')}",
-            f"Constructivo {self.get_alias('greedy_random_row_balanced (α=0.75)')}", f"Constructivo {self.get_alias('greedy_random_row_balanced (α=1.0)')}",
-            f"Constructivo {self.get_alias('random_greedy_by_row (α=0.25)')}", f"Constructivo {self.get_alias('random_greedy_by_row (α=0.5)')}",
-            f"Constructivo {self.get_alias('random_greedy_by_row (α=0.75)')}", f"Constructivo {self.get_alias('random_greedy_by_row (α=1.0)')}",
-            f"Constructivo {self.get_alias('random_greedy_global (α=0.25)')}", f"Constructivo {self.get_alias('random_greedy_global (α=0.5)')}",
-            f"Constructivo {self.get_alias('random_greedy_global (α=0.75)')}", f"Constructivo {self.get_alias('random_greedy_global (α=1.0)')}",
-            f"Constructivo {self.get_alias('random_greedy_row_balanced (α=0.25)')}", f"Constructivo {self.get_alias('random_greedy_row_balanced (α=0.5)')}",
-            f"Constructivo {self.get_alias('random_greedy_row_balanced (α=0.75)')}", f"Constructivo {self.get_alias('random_greedy_row_balanced (α=1.0)')}",
-            f"Constructivo {self.get_alias('global_score_ordering (α=0.25)')}", f"Constructivo {self.get_alias('global_score_ordering (α=0.5)')}",
-            f"Constructivo {self.get_alias('global_score_ordering (α=0.75)')}", f"Constructivo {self.get_alias('global_score_ordering (α=1.0)')}",
-            "Mejores Soluciones Iniciales"
+        # ---------- Hoja 0: Legend ----------
+        ws_legend = workbook.add_worksheet("Legend")
+        ws_legend.set_column(0, 3, 40)
+        ws_legend.write_row(0, 0, ["Constructors (alias)", "Name", "Notes"], header_format)
+        constructor_legend = [
+            ("C₀", "Random", "Uniform random ordering per row."),
+            ("C₁", "Guillermo", "Score = flows & size; reorder pattern."),
+            ("C₂", "Greedy Random by Row", "Row-wise GRASP (RCL by cost)."),
+            ("C₃", "Greedy Random Global", "Global GRASP across rows."),
+            ("C₄", "Greedy Random Row Balanced", "Row balancing + GRASP."),
+            ("C₅", "Random Greedy by Row", "Random sample, then greedy insert (row)."),
+            ("C₆", "Random Greedy Global", "Random sample, then greedy insert (global)."),
+            ("C₇", "Random Greedy Row Balanced", "Balanced variant of random-greedy."),
+            ("C₈", "Global Score Ordering", "Score = w·flows + (1-w)·size; best insertion."),
+            ("C₉", "Global Score Ordering (Randomized)", "RCL over score; best insertion."),
         ]
-        worksheet_general.write_row(0, 0, headers_general, header_format)
-        worksheet_general.set_column(0, len(headers_general) - 1, default_column_width)
+        r = 1
+        for alias, name, note in constructor_legend:
+            ws_legend.write_row(r, 0, [alias, name, note], cell_format); r += 1
+        r += 1
+        ws_legend.write_row(r, 0, ["Local search abbreviations", "Full name"], header_format); r += 1
+        for k, v in {"FMS":"first_move_swap", "BMS":"best_move_swap", "FM":"first_move", "BM":"best_move"}.items():
+            ws_legend.write_row(r, 0, [k, v], cell_format); r += 1
+        r += 1
+        ws_legend.write(r, 0, "α (alpha) controls the RCL threshold in GRASP-like constructors (lower α = greedier).", bold_format)
+        ws_legend.freeze_panes(1, 0)
+
+        # ---------- Hoja 1: General Results ----------
+        ws_general = workbook.add_worksheet("General Results")
+        headers_general = [
+            "Instance", f"Constructor {self.get_alias('guillermo')} (Cost)",
+            f"Constructor {self.get_alias('random')} (Average)",
+            f"Constructor {self.get_alias('greedy_random_by_row (α=0.25)')}", f"Constructor {self.get_alias('greedy_random_by_row (α=0.5)')}",
+            f"Constructor {self.get_alias('greedy_random_by_row (α=0.75)')}", f"Constructor {self.get_alias('greedy_random_by_row (α=1.0)')}",
+            f"Constructor {self.get_alias('greedy_random_global (α=0.25)')}", f"Constructor {self.get_alias('greedy_random_global (α=0.5)')}",
+            f"Constructor {self.get_alias('greedy_random_global (α=0.75)')}", f"Constructor {self.get_alias('greedy_random_global (α=1.0)')}",
+            f"Constructor {self.get_alias('greedy_random_row_balanced (α=0.25)')}", f"Constructor {self.get_alias('greedy_random_row_balanced (α=0.5)')}",
+            f"Constructor {self.get_alias('greedy_random_row_balanced (α=0.75)')}", f"Constructor {self.get_alias('greedy_random_row_balanced (α=1.0)')}",
+            f"Constructor {self.get_alias('random_greedy_by_row (α=0.25)')}", f"Constructor {self.get_alias('random_greedy_by_row (α=0.5)')}",
+            f"Constructor {self.get_alias('random_greedy_by_row (α=0.75)')}", f"Constructor {self.get_alias('random_greedy_by_row (α=1.0)')}",
+            f"Constructor {self.get_alias('random_greedy_global (α=0.25)')}", f"Constructor {self.get_alias('random_greedy_global (α=0.5)')}",
+            f"Constructor {self.get_alias('random_greedy_global (α=0.75)')}", f"Constructor {self.get_alias('random_greedy_global (α=1.0)')}",
+            f"Constructor {self.get_alias('random_greedy_row_balanced (α=0.25)')}", f"Constructor {self.get_alias('random_greedy_row_balanced (α=0.5)')}",
+            f"Constructor {self.get_alias('random_greedy_row_balanced (α=0.75)')}", f"Constructor {self.get_alias('random_greedy_row_balanced (α=1.0)')}",
+            f"Constructor {self.get_alias('global_score_ordering')}",
+            f"Constructor {self.get_alias('global_score_ordering_random (α=0.25)')}", f"Constructor {self.get_alias('global_score_ordering_random (α=0.5)')}",
+            f"Constructor {self.get_alias('global_score_ordering_random (α=0.75)')}", f"Constructor {self.get_alias('global_score_ordering_random (α=1.0)')}",
+            "Best Initial (Top1)", "Best Initial (Top2)", "Best Initial (Top3)"
+        ]
+        ws_general.write_row(0, 0, headers_general, header_format)
+        ws_general.set_column(0, len(headers_general) - 1, default_column_width)
+        ws_general.freeze_panes(1, 0)
 
         for row_idx, (plant_name, plant_results) in enumerate(self.results.items(), start=1):
-            general_data = [
-                plant_name,
-                plant_results["constructors"]["guillermo"]["average"],
-                plant_results["constructors"]["random"]["average"],
-                plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["greedy_random_by_row"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["greedy_random_global"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["greedy_random_global"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["greedy_random_global"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["greedy_random_global"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["random_greedy_by_row"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["random_greedy_global"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["random_greedy_global"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(1.0, "N/A"),
-                plant_results["constructors"]["global_score_ordering"]["averages"].get(0.25, "N/A"),
-                plant_results["constructors"]["global_score_ordering"]["averages"].get(0.5, "N/A"),
-                plant_results["constructors"]["global_score_ordering"]["averages"].get(0.75, "N/A"),
-                plant_results["constructors"]["global_score_ordering"]["averages"].get(1.0, "N/A"),
-                " || ".join(map(str, plant_results["best_initial"]["solutions"])) if plant_results["best_initial"]["solutions"] else "N/A"
-            ]
-            worksheet_general.write_row(row_idx, 0, general_data, cell_format)
+            bi_entries = plant_results["best_initial"]["entries"]
+            def bi_cell(i):
+                if i < len(bi_entries):
+                    e = bi_entries[i]
+                    return f"{e['origin']} — {e['cost']} (build {e['build_time']:.4f}s)"
+                return "N/A"
 
-        # Tabla 2: Best constructors
-        worksheet = workbook.add_worksheet("Best constructivo")
-        constructores = ["guillermo", "random", "greedy_random_by_row", "greedy_random_global", "greedy_random_row_balanced",
-                         "random_greedy_by_row", "random_greedy_global", "random_greedy_row_balanced","global_score_ordering"]
+            ws_general.write_row(
+                row_idx, 0,
+                [
+                    plant_name,
+                    plant_results["constructors"]["guillermo"]["average"],
+                    plant_results["constructors"]["random"]["average"],
+                    plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["greedy_random_by_row"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["greedy_random_by_row"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["greedy_random_global"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["greedy_random_global"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["greedy_random_global"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["greedy_random_global"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["greedy_random_row_balanced"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["random_greedy_by_row"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["random_greedy_by_row"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["random_greedy_global"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["random_greedy_global"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["random_greedy_global"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["random_greedy_global"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["random_greedy_row_balanced"]["averages"].get(1.0, "N/A"),
+                    plant_results["constructors"]["global_score_ordering"]["average"],
+                    plant_results["constructors"]["global_score_ordering_random"]["averages"].get(0.25, "N/A"),
+                    plant_results["constructors"]["global_score_ordering_random"]["averages"].get(0.5, "N/A"),
+                    plant_results["constructors"]["global_score_ordering_random"]["averages"].get(0.75, "N/A"),
+                    plant_results["constructors"]["global_score_ordering_random"]["averages"].get(1.0, "N/A"),
+                    bi_cell(0), bi_cell(1), bi_cell(2)
+                ],
+                cell_format
+            )
 
-        headers = ["Instancia"] + [self.get_alias(c) for c in constructores] + ["Best"]
+        # ---------- Hoja 2: Best Constructor (con tiempo del mejor) ----------
+        ws_best_ctor = workbook.add_worksheet("Best Constructor")
+        constructors = ["guillermo", "random", "greedy_random_by_row", "greedy_random_global",
+                        "greedy_random_row_balanced", "random_greedy_by_row", "random_greedy_global",
+                        "random_greedy_row_balanced", "global_score_ordering", "global_score_ordering_random"]
 
-        # Formatos
-        cell_format = workbook.add_format({"border": 1, "align": "center"})
-        highlight_format = workbook.add_format({"border": 1, "bold": True, "bg_color": "#FFD700", "align": "center"})  # Negrita y color de fondo dorado
-
-        worksheet.write_row(0, 0, headers, header_format)
-        worksheet.set_column(0, len(headers) - 1, 15)  # Ajusta ancho de columnas
-
-        best_count = {constructor: 0 for constructor in constructores}
+        # Duplicamos columnas: Cost y Time por constructor
+        headers = ["Instance"]
+        for c in constructors:
+            headers += [f"{self.get_alias(c)} (Cost)", f"{self.get_alias(c)} (Time)"]
+        headers += ["Best (Cost)"]
+        ws_best_ctor.write_row(0, 0, headers, header_format)
+        ws_best_ctor.set_column(0, len(headers) - 1, 15)
+        ws_best_ctor.freeze_panes(1, 0)
 
         row = 1
-        for instancia, data in self.results.items():
-            # Extraer los valores "best" por constructor
-            best_solutions = {constructor: data["constructors"][constructor]["best"] for constructor in constructores}
-            best_value = min(best_solutions.values())
+        for instance, data in self.results.items():
+            row_values = [instance]
+            best_value = float("inf")
+            for c in constructors:
+                best_sol = data["constructors"][c]["best"]
+                best_time = data["constructors"][c].get("best_time", 0.0)
+                cost_val = best_sol.cost if best_sol is not None else "N/A"
+                row_values += [cost_val, best_time]
+                if isinstance(cost_val, (int, float)) and cost_val < best_value:
+                    best_value = cost_val
+            row_values += [best_value if best_value < float("inf") else "N/A"]
 
-            # Contabilizar el número de mejores valores
-            for constructor, valor in best_solutions.items():
-                if valor.cost == best_value.cost:
-                    best_count[constructor] += 1
+            # Escribir y resaltar mínimos de Cost (no de Time)
+            col = 1
+            min_cost_cols = []
+            # Identificar las columnas de coste para highlight
+            costs_for_min = []
+            for c in constructors:
+                costs_for_min.append(data["constructors"][c]["best"].cost if data["constructors"][c]["best"] is not None else float("inf"))
+            min_cost = min(costs_for_min) if costs_for_min else float("inf")
 
-            # Preparar fila con valores
-            fila = [instancia] + [best_solutions[constructor].cost for constructor in constructores] + [best_value.cost]
-
-            # Escribir la fila y resaltar los valores mínimos
-            for col, value in enumerate(fila):
-                if col > 0 and col <= len(constructores):  # Solo para columnas de constructores
-                    if value == best_value.cost:
-                        worksheet.write(row, col, value, highlight_format)
-                    else:
-                        worksheet.write(row, col, value, cell_format)
+            ws_best_ctor.write(row, 0, instance, cell_center)
+            idx_cost_cell = 0
+            for c_idx, c in enumerate(constructors):
+                cost = costs_for_min[c_idx]
+                time_val = data["constructors"][c].get("best_time", 0.0)
+                if cost == min_cost:
+                    ws_best_ctor.write(row, col, cost, workbook.add_format({"border":1,"align":"center","bold":True,"bg_color":"#FFD700"}))
                 else:
-                    worksheet.write(row, col, value, cell_format)
-
+                    ws_best_ctor.write(row, col, cost if cost < float("inf") else "N/A", cell_center)
+                ws_best_ctor.write(row, col+1, time_val, cell_center)
+                col += 2
+            ws_best_ctor.write(row, col, min_cost if min_cost < float("inf") else "N/A", cell_center)
             row += 1
 
-        # Escribir resumen
-        worksheet.write(row, 0, "Resumen", bold_format)
-        for col, constructor in enumerate(constructores, start=1):
-            worksheet.write(row, col, best_count[constructor], cell_format)
+        # ---------- Hoja 3: Local Searches (con Total Time) ----------
+        ws_local = workbook.add_worksheet("Local Searches")
+        headers_local = ["Instance", "Solution", "Method", "Cost", "Time", "Total Time"]
+        ws_local.write_row(0, 0, headers_local, header_format)
+        ws_local.set_column(0, len(headers_local) - 1, default_column_width)
+        ws_local.freeze_panes(1, 0)
 
-        # Tabla 3: Resultados de búsquedas locales
-        worksheet_local_search = workbook.add_worksheet("Búsquedas Locales")
-        headers_local = ["Planta", "Soluciones", "Método", "coste", "Tiempo"]
-        worksheet_local_search.write_row(0, 0, headers_local, header_format)
-        worksheet_local_search.set_column(0, len(headers_local) - 1, default_column_width)
-
-        row_idx = 1
+        r = 1
         for plant_name, plant_results in self.results.items():
             for solution_id, search_results in plant_results["local_search"]["individual"].items():
                 solution_id_alias = self.get_alias(solution_id)
                 for method, metrics in search_results.items():
-                    local_search_data = [
-                        plant_name,
-                        solution_id_alias,
-                        method,
-                        metrics.get("cost", "N/A"),
-                        metrics.get("time", "N/A")
-                    ]
-                    worksheet_local_search.write_row(row_idx, 0, local_search_data, cell_wrap_format)
-                    row_idx += 1
+                    method_label = LS_ABBR.get(method, method)
+                    ws_local.write_row(
+                        r, 0,
+                        [
+                            plant_name,
+                            solution_id_alias,
+                            method_label,
+                            metrics.get("cost", "N/A"),
+                            metrics.get("time", "N/A"),
+                            metrics.get("total_time", "N/A")
+                        ],
+                        cell_wrap_format
+                    )
+                    r += 1
 
-        # Tabla 4: Mejores resultados de búsquedas locales
-        worksheet_best_local = workbook.add_worksheet("Best Local Search")
-        headers_best_local = ["Planta", "Mejores Soluciones", "Métodos Locales", "coste"]
-        worksheet_best_local.write_row(0, 0, headers_best_local, header_format)
-        worksheet_best_local.set_column(0, len(headers_best_local) - 1, default_column_width)
-
-        local_methods = ["first_move_swap", "best_move_swap", "first_move", "best_move"]
-        best_count_local = {method: 0 for method in local_methods}
-        best_solution_count = {}
+        # ---------- Hoja 4: Best Local Search (incluye Total Time) ----------
+        ws_best_local = workbook.add_worksheet("Best Local Search")
+        headers_best_local = ["Instance", "Best Solutions", "Local Methods", "Cost", "Total Time"]
+        ws_best_local.write_row(0, 0, headers_best_local, header_format)
+        ws_best_local.set_column(0, len(headers_best_local) - 1, default_column_width)
+        ws_best_local.freeze_panes(1, 0)
 
         row = 1
         for plant_name, plant_results in self.results.items():
-            initial_cost = plant_results["best_initial"]["solutions"][0] # Costo de la solución inicial
+            entries = plant_results["best_initial"]["entries"]
+            initial_cost = entries[0]["cost"]  # coste de la mejor inicial (1st)
 
-            best_cost = float('inf')
+            local_best_cost = float('inf')
             best_solutions = []
             best_methods = []
+            best_total_times = []
 
             for solution_id, search_results in plant_results["local_search"]["individual"].items():
+                # coste mínimo sobre métodos para esta solución_id
+                min_cost_here = min(v.get("cost", float('inf')) for v in search_results.values())
                 for method, metrics in search_results.items():
                     current_cost = metrics.get("cost", float('inf'))
-                    if current_cost < best_cost:
-                        best_cost = current_cost
+                    if current_cost != min_cost_here:
+                        continue
+                    total_time = metrics.get("total_time", 0.0)
+                    if current_cost < local_best_cost:
+                        local_best_cost = current_cost
                         best_solutions = [solution_id]
-                        best_methods = [method]
-                    elif current_cost == best_cost:
+                        best_methods = [LS_ABBR.get(method, method)]
+                        best_total_times = [total_time]
+                    elif current_cost == local_best_cost:
                         best_solutions.append(solution_id)
-                        best_methods.append(method)
+                        best_methods.append(LS_ABBR.get(method, method))
+                        best_total_times.append(total_time)
 
-            # Si ninguna búsqueda local mejora la solución inicial
-            if best_cost >= initial_cost:
-                best_constructor , _ = next(iter(plant_results["local_search"]["individual"].items()))
-                worksheet_best_local.write_row(
-                    row,
-                    0,
-                    [plant_name, self.get_alias(best_constructor), "Ninguna búsqueda mejora la solución", initial_cost],
+            if local_best_cost >= initial_cost:
+                best_constructor, _ = next(iter(plant_results["local_search"]["individual"].items()))
+                ws_best_local.write_row(
+                    row, 0,
+                    [plant_name, self.get_alias(best_constructor), "No local search improves the solution", initial_cost, "—"],
                     cell_format,
                 )
             else:
                 best_solutions_aliases = [self.get_alias(sol) for sol in best_solutions]
-                worksheet_best_local.write_row(
-                    row,
-                    0,
-                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_methods), best_cost],
+                ws_best_local.write_row(
+                    row, 0,
+                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_methods),
+                     local_best_cost, ", ".join(f"{t:.4f}s" for t in best_total_times)],
                     cell_format,
                 )
-                for method in best_methods:
-                    best_count_local[method] += 1
-                for solution in best_solutions:
-                    best_solution_count[solution] = best_solution_count.get(solution, 0) + 1
-
             row += 1
 
-        row += 2
-        worksheet_best_local.write(row, 0, "Resumen Métodos", bold_format)
-        row += 1
-        worksheet_best_local.write_row(row, 0, ["Método", "Veces mejor", "Tiempos Medios"], header_format)
-        row += 1
+        # ---------- Hoja 5: Extended Searches (con Total Time) ----------
+        ws_extended = workbook.add_worksheet("Extended Searches")
+        headers_extended = ["Instance", "Solution", "Combination", "Cost", "Time", "Total Time"]
+        ws_extended.write_row(0, 0, headers_extended, header_format)
+        ws_extended.set_column(0, len(headers_extended) - 1, default_column_width)
+        ws_extended.freeze_panes(1, 0)
 
-        # Diccionario para acumular tiempos
-        method_times = {method: 0 for method in local_methods}
-
+        r = 1
         for plant_name, plant_results in self.results.items():
-            for solution_id, search_results in plant_results["local_search"]["individual"].items():
-                for method, metrics in search_results.items():
-                    if metrics.get("cost", float('inf')) == best_cost:
-                        method_times[method] += metrics.get("time", 0)
-
-        for method, count in best_count_local.items():
-            avg_time = method_times[method] / count if count > 0 else 0
-            worksheet_best_local.write_row(row, 0, [method, count, avg_time], cell_format)
-            row += 1
-
-        # Resumen de mejores soluciones
-        row += 2
-        worksheet_best_local.write(row, 0, "Resumen Soluciones", bold_format)
-        row += 1
-        worksheet_best_local.write_row(row, 0, ["Solución", "Veces mejor"], header_format)
-        row += 1
-        for solution, count in best_solution_count.items():
-            worksheet_best_local.write_row(row, 0, [self.get_alias(solution), count], cell_format)
-            row += 1
-
-        # Tabla 5: Resultados de búsquedas locales extendidas
-        worksheet_extended_search = workbook.add_worksheet("Búsquedas Extendidas")
-        headers_extended = ["Planta", "Solución", "Combinación", "coste", "Tiempo"]
-        worksheet_extended_search.write_row(0, 0, headers_extended, header_format)
-        worksheet_extended_search.set_column(0, len(headers_extended) - 1, default_column_width)
-
-        row_idx = 1
-        for plant_name, plant_results in self.results.items():
-            for solution_id, extended_search_results in plant_results["local_search"]["extended"].items():
+            for solution_id, extended_results in plant_results["local_search"]["extended"].items():
                 solution_id_alias = self.get_alias(solution_id)
-                for combination, metrics in extended_search_results.items():
-                    extended_search_data = [
-                        plant_name,
-                        solution_id_alias,
-                        combination,
-                        metrics.get("cost", "N/A"),
-                        metrics.get("time", "N/A")
-                    ]
-                    worksheet_extended_search.write_row(row_idx, 0, extended_search_data, cell_wrap_format)
-                    row_idx += 1
+                for combination, metrics in extended_results.items():
+                    ws_extended.write_row(
+                        r, 0,
+                        [
+                            plant_name,
+                            solution_id_alias,
+                            combination,
+                            metrics.get("cost", "N/A"),
+                            metrics.get("time", "N/A"),
+                            metrics.get("total_time", "N/A")
+                        ],
+                        cell_wrap_format
+                    )
+                    r += 1
 
-        # Tabla 6: Mejores resultados de búsquedas extendidas
-        worksheet_best_extended = workbook.add_worksheet("Best Extended Search")
-        headers_best_extended = ["Planta", "Mejores Soluciones", "Combinaciones", "coste"]
-        worksheet_best_extended.write_row(0, 0, headers_best_extended, header_format)
-        worksheet_best_extended.set_column(0, len(headers_best_extended) - 1, default_column_width)
+        # ---------- Hoja 6: Best Extended Search (incluye Total Time) ----------
+        ws_best_ext = workbook.add_worksheet("Best Extended Search")
+        headers_best_extended = ["Instance", "Best Solutions", "Combinations", "Cost", "Total Time"]
+        ws_best_ext.write_row(0, 0, headers_best_extended, header_format)
+        ws_best_ext.set_column(0, len(headers_best_extended) - 1, default_column_width)
+        ws_best_ext.freeze_panes(1, 0)
 
+        # Para resumen de combinaciones
         best_count_extended = {}
         best_solution_usage_count = {}
-        extended_method_times = {combination: 0 for combination in best_count_extended}  # Diccionario para acumular tiempos
-        row = 1
+        extended_method_times = {}
 
+        row = 1
         for plant_name, plant_results in self.results.items():
-            initial_cost = plant_results["best_initial"]["solutions"][0]  # Costo de la solución inicial
-            best_cost = float('inf')
+            entries = plant_results["best_initial"]["entries"]
+            initial_cost = entries[0]["cost"]
+            best_cost_overall = float('inf')
             best_solutions = []
             best_combinations = []
+            best_total_times = []
 
-            for solution_id, extended_search_results in plant_results["local_search"]["extended"].items():
-                for combination, metrics in extended_search_results.items():
+            for solution_id, extended_results in plant_results["local_search"]["extended"].items():
+                # coste mínimo sobre combos para esta solución_id
+                min_cost_here = min(v.get("cost", float('inf')) for v in extended_results.values())
+                for combination, metrics in extended_results.items():
                     current_cost = metrics.get("cost", float('inf'))
-                    if current_cost < best_cost:
-                        best_cost = current_cost
+                    if current_cost != min_cost_here:
+                        continue
+                    total_time = metrics.get("total_time", 0.0)
+                    if current_cost < best_cost_overall:
+                        best_cost_overall = current_cost
                         best_solutions = [solution_id]
                         best_combinations = [combination]
-                    elif current_cost == best_cost:
+                        best_total_times = [total_time]
+                    elif current_cost == best_cost_overall:
                         best_solutions.append(solution_id)
                         best_combinations.append(combination)
+                        best_total_times.append(total_time)
 
-            # Acumular tiempos solo para las combinaciones que resultaron mejores
-            for solution_id, extended_search_results in plant_results["local_search"]["extended"].items():
-                for combination, metrics in extended_search_results.items():
-                    if metrics.get("cost", float('inf')) == best_cost:  # Combinación que coincide con el mejor costo
-                        if combination not in extended_method_times:
-                            extended_method_times[combination] = metrics.get("time", 0)
-                        else:
-                            extended_method_times[combination] += metrics.get("time", 0)
+            # Acumular tiempos sólo para combos ganadoras (para medias)
+            for solution_id, extended_results in plant_results["local_search"]["extended"].items():
+                min_cost_here = min(v.get("cost", float('inf')) for v in extended_results.values())
+                for combination, metrics in extended_results.items():
+                    if metrics.get("cost", float('inf')) == min_cost_here and min_cost_here == best_cost_overall:
+                        extended_method_times[combination] = extended_method_times.get(combination, 0.0) + metrics.get("time", 0.0)
 
-            # Si ninguna búsqueda extendida mejora la solución inicial
-            if best_cost >= initial_cost:
+            if best_cost_overall >= initial_cost:
                 best_constructor, _ = next(iter(plant_results["local_search"]["individual"].items()))
-                worksheet_best_extended.write_row(
-                    row,
-                    0,
-                    [plant_name, self.get_alias(best_constructor), "Ninguna búsqueda mejora la solución", initial_cost],
+                ws_best_ext.write_row(
+                    row, 0,
+                    [plant_name, self.get_alias(best_constructor), "No extended search improves the solution", initial_cost, "—"],
                     cell_format,
                 )
             else:
                 best_solutions_aliases = [self.get_alias(sol) for sol in best_solutions]
-                worksheet_best_extended.write_row(
-                    row,
-                    0,
-                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_combinations), best_cost],
+                ws_best_ext.write_row(
+                    row, 0,
+                    [plant_name, ", ".join(best_solutions_aliases), ", ".join(best_combinations),
+                     best_cost_overall, ", ".join(f"{t:.4f}s" for t in best_total_times)],
                     cell_format,
                 )
                 for combination in best_combinations:
                     best_count_extended[combination] = best_count_extended.get(combination, 0) + 1
                 for solution in best_solutions:
                     best_solution_usage_count[solution] = best_solution_usage_count.get(solution, 0) + 1
-
             row += 1
 
-        # Resumen de combinaciones con tiempos medios
         row += 2
-        worksheet_best_extended.write(row, 0, "Resumen Combinaciones", bold_format)
-        row += 1
-        worksheet_best_extended.write_row(row, 0, ["Combinación", "Veces mejor", "Tiempos Medios"], header_format)
-        row += 1
-
+        ws_best_ext.write(row, 0, "Combinations Summary", bold_format); row += 1
+        ws_best_ext.write_row(row, 0, ["Combination", "Times Best", "Average Time"], header_format); row += 1
         for combination, count in best_count_extended.items():
-            avg_time = extended_method_times[combination] / count if count > 0 else 0
-            worksheet_best_extended.write_row(row, 0, [combination, count, avg_time], cell_format)
+            avg_time = extended_method_times.get(combination, 0) / count if count > 0 else 0
+            ws_best_ext.write_row(row, 0, [combination, count, avg_time], cell_format)
             row += 1
 
-        # Resumen de mejores soluciones extendidas
         row += 2
-        worksheet_best_extended.write(row, 0, "Resumen Soluciones", bold_format)
-        row += 1
-        worksheet_best_extended.write_row(row, 0, ["Solución", "Veces mejor"], header_format)
-        row += 1
-
+        ws_best_ext.write(row, 0, "Solutions Summary", bold_format); row += 1
+        ws_best_ext.write_row(row, 0, ["Solution", "Times Best"], header_format); row += 1
         for solution, count in best_solution_usage_count.items():
-            worksheet_best_extended.write_row(row, 0, [self.get_alias(solution), count], cell_format)
+            ws_best_ext.write_row(row, 0, [self.get_alias(solution), count], cell_format)
             row += 1
 
-        # Hoja de resultados generales
-        worksheet_summary = workbook.add_worksheet("Estadísticas Generales")
-        headers_summary = ["Algoritmo", "Media (Coste)", "Media (Tiempo)", "Desviación Típica", "Cantidad de Best"]
-        worksheet_summary.write_row(0, 0, headers_summary, header_format)
-        worksheet_summary.set_column(0, len(headers_summary) - 1, default_column_width)
+        # ---------- Hoja 7: Overall Statistics ----------
+        ws_summary = workbook.add_worksheet("Overall Statistics")
+        headers_summary = ["Algorithm", "Mean (Cost)", "Mean (Time)", "Std. Dev. (rel.)", "Count of Best"]
+        ws_summary.write_row(0, 0, headers_summary, header_format)
+        ws_summary.set_column(0, len(headers_summary) - 1, default_column_width)
+        ws_summary.freeze_panes(1, 0)
 
         row_idx = 1
-
-        # Agregar estadísticas de constructores
         aggregated_constructors = self.aggregate_statistics_across_instances(self.results, "constructors")
         for method_name, method_data in aggregated_constructors.items():
             avg_cost, avg_time, std_dev, total_bests = self.calculate_overall_statistics([method_data])
             alias_name = self.get_alias(method_name)
-            worksheet_summary.write_row(
+            ws_summary.write_row(
                 row_idx, 0,
-                [f"Constructivo - {alias_name}", avg_cost, avg_time, std_dev, total_bests],
+                [f"Constructor - {alias_name}", avg_cost, avg_time, std_dev, total_bests],
                 cell_format
             )
             row_idx += 1
-
-        # # Agregar estadísticas de búsquedas locales individuales
-        # aggregated_individual_search = aggregate_statistics_across_instances(results, "local_search")
-        # for method_name, method_data in aggregated_individual_search.get("individual", {}).items():
-        #     avg_cost, avg_time, std_dev, total_bests = calculate_overall_statistics([method_data])
-        #     worksheet_summary.write_row(
-        #         row_idx, 0,
-        #         [f"Búsqueda Local - {method_name}", avg_cost, avg_time, std_dev, total_bests],
-        #         cell_format
-        #     )
-        #     row_idx += 1
-        #
-        # # Agregar estadísticas de búsquedas locales extendidas
-        # aggregated_extended_search = aggregate_statistics_across_instances(results, "local_search")
-        # for method_name, method_data in aggregated_extended_search.get("extended", {}).items():
-        #     avg_cost, avg_time, std_dev, total_bests = calculate_overall_statistics([method_data])
-        #     worksheet_summary.write_row(
-        #         row_idx, 0,
-        #         [f"Búsqueda Local Extendida - {method_name}", avg_cost, avg_time, std_dev, total_bests],
-        #         cell_format
-        #     )
-        #     row_idx += 1
 
         workbook.close()
 
     def calculate_overall_statistics(self, data):
         """
-        Calcula las estadísticas globales (media, tiempo promedio, desviación típica y número de best)
-        a partir de los datos de todas las instancias.
+        Compute global statistics (mean cost, mean time, relative std. dev., and #best)
+        across all instances.
         """
         all_costs = []
         all_times = []
@@ -835,10 +836,9 @@ class Metrics:
 
         return avg_cost, avg_time, std_dev, total_bests
 
-
     def aggregate_statistics_across_instances(self, results, key):
         """
-        Agrega estadísticas para todas las instancias agrupadas por metodo (por ejemplo, constructor o búsqueda local).
+        Aggregate statistics across instances grouped by method (constructor or local search).
         """
         aggregated = {}
 
@@ -846,83 +846,55 @@ class Metrics:
             methods = plant_results.get(key, {})
 
             if key == "constructors":
-                # Procesar constructores como greedy_random_by_row y random_greedy
                 for method_name, method_data in methods.items():
-                    if method_name in ["greedy_random_by_row", "random_greedy_by_row", "greedy_random_global", "greedy_random_row_balanced",
-                                       "random_greedy_global", "random_greedy_row_balanced", "global_score_ordering"]:
-                        # Procesar métodos con alfas
+                    if method_name in ["greedy_random_by_row", "random_greedy_by_row", "greedy_random_global",
+                                       "greedy_random_row_balanced", "random_greedy_global",
+                                       "random_greedy_row_balanced", "global_score_ordering_random"]:
                         averages = method_data.get("averages", {})
-                        if not averages:  # Saltar si no hay datos en "averages"
+                        if not averages:
                             continue
-
                         std_devs = method_data.get("std_devs", {})
                         num_bests = method_data.get("num_bests", {})
                         times = method_data.get("times", [])
-
-                        # Ordenar los alfas
                         ordered_alphas = sorted(averages.keys())
 
                         for alpha, avg_cost in averages.items():
                             if alpha not in ordered_alphas:
-                                continue  # Saltar si el alfa no es válido
+                                continue
                             alpha_index = ordered_alphas.index(alpha)
-
-                            # Obtener valores correspondientes
                             avg_time = times[alpha_index] if alpha_index < len(times) else 0
                             std_dev = std_devs.get(alpha, 0)
                             num_best = num_bests.get(alpha, 0)
 
                             alpha_name = f"{method_name} (alpha {alpha})"
                             if alpha_name not in aggregated:
-                                aggregated[alpha_name] = {
-                                    "costs": [],
-                                    "times": [],
-                                    "num_bests": 0,
-                                    "std_devs": []
-                                }
+                                aggregated[alpha_name] = {"costs": [], "times": [], "num_bests": 0, "std_devs": []}
 
                             aggregated[alpha_name]["costs"].append(avg_cost)
                             aggregated[alpha_name]["times"].append(avg_time)
                             aggregated[alpha_name]["num_bests"] += num_best
                             aggregated[alpha_name]["std_devs"].append(std_dev)
                     else:
-                        # Procesar otros métodos
                         if method_name not in aggregated:
-                            aggregated[method_name] = {
-                                "costs": [],
-                                "times": [],
-                                "num_bests": 0,
-                                "std_devs": []
-                            }
-
+                            aggregated[method_name] = {"costs": [], "times": [], "num_bests": 0, "std_devs": []}
                         aggregated[method_name]["costs"].append(method_data.get("average", 0))
                         aggregated[method_name]["times"].append(method_data.get("time", 0))
                         aggregated[method_name]["num_bests"] += method_data.get("num_bests", 0)
                         aggregated[method_name]["std_devs"].append(method_data.get("std_devs", 0))
 
             elif key == "local_search":
-                # Procesar búsquedas locales (individual y extended)
                 for search_type, search_methods in methods.items():
                     for solution_name, methods in search_methods.items():
                         search_key = f"{search_type} - {solution_name}"
-
                         if search_key not in aggregated:
-                            aggregated[search_key] = {
-                                "costs": [],
-                                "times": [],
-                                "num_bests": 0
-                            }
-
+                            aggregated[search_key] = {"costs": [], "times": [], "num_bests": 0}
                         for method_name, method_results in methods.items():
                             costs = method_results.get("costs", [])
                             times = method_results.get("times", [])
                             num_bests = method_results.get("num_bests", 0)
-
                             aggregated[search_key]["costs"].extend(costs)
                             aggregated[search_key]["times"].extend(times)
                             aggregated[search_key]["num_bests"] += num_bests
 
-        # Limpiar entradas vacías (opcional)
         aggregated = {k: v for k, v in aggregated.items() if v["costs"]}
-
         return aggregated
