@@ -1,0 +1,64 @@
+# ============================================================================
+# irace scenario configuration
+# ============================================================================
+# Proyecto: Calibración de constructor greedy_random_by_row
+# Parámetros: alpha (0.1-1.0), sample_size (10-200)
+# ============================================================================
+
+# --- Archivos de configuración ---
+parameterFile = "parameters.txt"
+
+# --- Instancias ---
+trainInstancesDir = "instances"
+trainInstancesFile = ""
+
+# --- Target runner ---
+targetRunner = "target_runner.py"
+targetRunnerLauncher = "python"
+
+# --- Presupuesto ---
+# 2 parámetros × 500 = 1000 (mínimo recomendado)
+# Usamos 5000 para mejor exploración
+maxExperiments = 5000
+
+# --- Racing configuration ---
+# firstTest: número mínimo de instancias antes de empezar a descartar configuraciones
+# Con 43 instancias, empezamos a hacer racing después de probar 7
+firstTest = 7
+
+# eachTest: cada cuántas instancias adicionales hacer test estadístico
+eachTest = 1
+
+# Nivel de confianza para los tests estadísticos
+confidence = 0.95
+
+# Tipo de test
+testType = "F-test"
+
+# --- Paralelización ---
+# 3 cores (de 4 disponibles, dejamos 1 para el sistema)
+parallel = 3
+
+# Balance de carga (1 = activado)
+loadBalancing = 1
+
+# MPI desactivado (no lo necesitamos)
+mpi = 0
+
+# --- Semilla y determinismo ---
+seed = 123456
+
+# deterministic = 0 porque nuestro algoritmo es estocástico
+deterministic = 0
+
+# --- Directorio de trabajo ---
+execDir = ""
+
+# --- Archivo de log ---
+logFile = "irace.Rdata"
+
+# --- Opciones avanzadas ---
+elitist = 1
+elitistNewInstances = 1
+postselection = 1
+capping = 0

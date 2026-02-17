@@ -1,0 +1,47 @@
+library(irace)
+setwd("W:/CosasUni/TFG_PROP/src/irace")
+
+# Encontrar la ruta de Python (tu .venv)
+python_path <- "W:/CosasUni/TFG_PROP/.venv/Scripts/python.exe"
+
+# Verificar que existe
+file.exists(python_path)  # Debería devolver TRUE
+
+# Definir parámetros manualmente
+parameters <- readParameters(text = '
+alpha         ""   r    (0.1, 1.0)
+sample_size   ""   i    (10, 200)
+')
+
+# Crear scenario con ruta completa de Python
+scenario <- list(
+  instances = list.files("instances", pattern = "\\.txt$", full.names = TRUE),
+  parameters = parameters,
+  targetRunner = "target_runner.py",
+  targetRunnerLauncher = python_path,  # Ruta completa en lugar de "python"
+
+  maxExperiments = 5000,
+  firstTest = 5,
+  eachTest = 1,
+  confidence = 0.95,
+  testType = "friedman",
+
+  parallel = 3,
+  loadBalancing = TRUE,
+  mpi = FALSE,
+
+  seed = 123456,
+  deterministic = FALSE,
+
+  execDir = getwd(),
+  logFile = "irace.Rdata",
+
+  elitist = TRUE,
+  elitistNewInstances = 1,
+  postselection = 1,
+
+  capping = FALSE
+)
+
+# Ejecutar irace
+irace(scenario = scenario)

@@ -1,0 +1,11 @@
+# === Parámetros para irace ===
+# Formato: nombre  switch  tipo  dominio  [condiciones]
+#
+# Tipos:
+#   r = real (float)
+#   i = integer
+#   c = complex (string)
+#
+
+alpha         "--alpha "         r    (0.1, 1.0)
+sample_size   "--sample_size "   i    (10, 200)
