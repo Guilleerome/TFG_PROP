@@ -139,23 +139,21 @@ class MetricsPaperComparisonTop3:
                 self.skipped.append((inst_name, f"Not in SOTA CSV as ({base}, n1={n1})"))
                 continue
 
+            if not inst_name.startswith("P24_c") or m != 3:
+                continue
+
             # Ejecutar 30 repeticiones por combo
-            print("Running", inst_name, "as", key)
             per_combo_runs: Dict[str, List[Tuple[float, float]]] = {f"{a} + {b}": [] for (a, b) in TOP3_COMBOS}
             for _ in range(self.iterations):
-                print("  Iteration", _ + 1)
                 # Constructor C2 (Greedy Random by Row, α=0.75)
                 t0 = time.time()
                 s0 = construct.constructor_greedy_random_by_row(plant, 0.75)
-                print("Constructor cost:", s0.cost)
                 ctor_time = time.time() - t0
 
                 for a, b in TOP3_COMBOS:
                     t1 = time.time()
                     inter = LS_FUN[a](s0)
-                    print("  After", a, "cost:", inter.cost)
                     final = LS_FUN[b](inter)
-                    print("  After", b, "cost:", final.cost)
                     ls_time = time.time() - t1
                     total_time = ctor_time + ls_time
                     per_combo_runs[f"{a} + {b}"].append((final.cost, total_time))

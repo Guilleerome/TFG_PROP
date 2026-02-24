@@ -6,6 +6,19 @@
 #   i = integer
 #   c = complex (string)
 #
+# Calibración:
+#   - Metahurística
+#   - Constructor
+#   - Busqueda local
 
-alpha         "--alpha "         r    (0.1, 1.0)
-sample_size   "--sample_size "   i    (10, 200)
+algorithm          "--algorithm "           c    (grasp)
+
+constructor        "--constructor "         c    (greedy_random_by_row, greedy_random_global, greedy_random_row_balanced, random_greedy_by_row, random_greedy_global, random_greedy_row_balanced, global_score_ordering, global_score_ordering_random)
+
+alpha              "--alpha "               r    (0.1, 1.0)
+sample_size        "--sample_size "         i    (10, 200)
+
+ls1                "--ls1 "                 c    (none, first_move, best_move, first_move_swap, best_move_swap)
+ls2                "--ls2 "                 c    (none, first_move, best_move, first_move_swap, best_move_swap)
+
+ls_sample_size     "--ls_sample_size "     i    (100, 1000)   ls1 != "none" || ls2 != "none"

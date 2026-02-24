@@ -82,7 +82,7 @@ class Metrics:
 
             # --- Constructores deterministas con tiempo por ejecución ---
             start_time = time.time()
-            guillermo_solution = construct.construct_guillermo(plant)
+            guillermo_solution = construct.constructor_guillermo(plant)
             guillermo_time = time.time() - start_time
             times["Guillermo"] = guillermo_time
 
@@ -181,7 +181,7 @@ class Metrics:
             random_time_acc = 0.0
             for _ in range(self.iterations):
                 start_time = time.time()
-                sol_aux = construct.construct_random(plant)
+                sol_aux = construct.constructor_random(plant)
                 elapsed = time.time() - start_time
                 random_time_acc += elapsed
                 random_runs.append((sol_aux, elapsed))

@@ -12,7 +12,7 @@ from src.constructors.construct_utils import (
     evaluate_best_insertion_candidates, sample_pairs,
     select_candidates_greedy_random, select_random_candidates_random_greedy)
 
-def construct_random(plant: Plant) -> Solution:
+def constructor_random(plant: Plant) -> Solution:
     rows = plant.rows
     n = plant.number
     disposition = []
@@ -26,7 +26,7 @@ def construct_random(plant: Plant) -> Solution:
 
     return Solution(plant, disposition)
 
-def construct_greedy(plant: Plant) -> Solution:
+def constructor_greedy(plant: Plant) -> Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition = []
@@ -45,7 +45,7 @@ def construct_greedy(plant: Plant) -> Solution:
 
     return Solution(plant, disposition)
 
-def construct_guillermo(plant: Plant) -> Solution:
+def constructor_guillermo(plant: Plant) -> Solution:
     rows = plant.rows
     capacities = plant.capacities
     disposition_aux = []
