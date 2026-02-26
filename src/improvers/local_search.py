@@ -5,10 +5,10 @@ from itertools import combinations
 import random
 
 
-def _copy_disposition(disposition: list[list[int]]) -> list[list[int]]:
+def copy_disposition(disposition: list[list[int]]) -> list[list[int]]:
     return [row[:] for row in disposition]
 
-def _swap_facilities(disposition: list[list[int]], row: int, idx1: int, idx2: int) -> None:
+def swap_facilities(disposition: list[list[int]], row: int, idx1: int, idx2: int) -> None:
     disposition[row][idx1], disposition[row][idx2] = disposition[row][idx2], disposition[row][idx1]
 
 def _sample_swap_pairs(q: int, s: int) -> list[tuple[int, int]]:
@@ -50,7 +50,7 @@ def first_move_swap(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = _copy_disposition(solution.disposition)
+    best_disp = copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -65,8 +65,8 @@ def first_move_swap(solution: Solution, s: int=500) -> Solution:
 
             pairs = _sample_swap_pairs(q, s)
             for j, k in pairs:
-                disposition_aux = _copy_disposition(best_disp)
-                _swap_facilities(disposition_aux, i, j, k)
+                disposition_aux = copy_disposition(best_disp)
+                swap_facilities(disposition_aux, i, j, k)
 
                 cost_aux = evaluator.evaluate(disposition_aux)
 
@@ -82,7 +82,7 @@ def first_move_swap(solution: Solution, s: int=500) -> Solution:
 
 def best_move_swap(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
-    best_disp = _copy_disposition(solution.disposition)
+    best_disp = copy_disposition(solution.disposition)
     best_cost = solution.cost
 
     improved = True
@@ -103,7 +103,7 @@ def first_move(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = _copy_disposition(solution.disposition)
+    best_disp = copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -118,7 +118,7 @@ def first_move(solution: Solution, s: int=500) -> Solution:
 
             pairs = _sample_insertion_moves(q, s)
             for (j,k) in pairs:
-                disposition_aux = _copy_disposition(best_disp)
+                disposition_aux = copy_disposition(best_disp)
                 row_aux = disposition_aux[r]
 
                 facility = row_aux[j]
@@ -141,7 +141,7 @@ def best_move(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = _copy_disposition(solution.disposition)
+    best_disp = copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -158,7 +158,7 @@ def best_move(solution: Solution, s: int=500) -> Solution:
 
             pairs = _sample_insertion_moves(q, s)
             for (j,k) in pairs:
-                disposition_aux = _copy_disposition(best_disp)
+                disposition_aux = copy_disposition(best_disp)
                 row_aux = disposition_aux[r]
                 facility = row_aux[j]
                 del row_aux[j]
@@ -233,8 +233,8 @@ def _best_swap(plant, disp: list[list[int]], current_cost: float, s: int) -> tup
             continue
 
         for j, k in _sample_swap_pairs(q, s):
-            candidate_disp = _copy_disposition(disp)
-            _swap_facilities(candidate_disp, i, j, k)
+            candidate_disp = copy_disposition(disp)
+            swap_facilities(candidate_disp, i, j, k)
 
             cost_aux = evaluator.evaluate(candidate_disp)
             if cost_aux < best_cost:

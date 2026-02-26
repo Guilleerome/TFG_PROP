@@ -11,7 +11,7 @@
 #   - Constructor
 #   - Busqueda local
 
-algorithm          "--algorithm "           c    (grasp)
+algorithm          "--algorithm "           c    (grasp, bvns)
 
 constructor        "--constructor "         c    (greedy_random_by_row, greedy_random_global, greedy_random_row_balanced, random_greedy_by_row, random_greedy_global, random_greedy_row_balanced, global_score_ordering, global_score_ordering_random)
 

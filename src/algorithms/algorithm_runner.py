@@ -3,10 +3,11 @@ from typing import Dict, Any
 from models.plant import Plant
 from models.solution import Solution
 from .grasp import run_grasp
+from .bvns import run_bvns
 
 ALGORITHMS = {
     'grasp': run_grasp,
-    # 'bvns': run_bvns,  # Futuro
+    'bvns': run_bvns,  # Futuro
     # 'vns': run_vns,    # Futuro
     # 'ils': run_ils,    # Futuro
 }
