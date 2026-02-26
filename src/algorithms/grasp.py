@@ -97,13 +97,15 @@ def run_grasp(
     # Agregar parámetros según el tipo de constructor
     if constructor_name in ['greedy_random_by_row', 'greedy_random_global',
                             'greedy_random_row_balanced', 'random_greedy_by_row',
-                            'random_greedy_global', 'random_greedy_row_balanced',
-                            'global_score_ordering_random']:
+                            'random_greedy_global', 'random_greedy_row_balanced']:
         ctor_args['alfa'] = alpha
         ctor_args['sample_size'] = sample_size
 
+    elif constructor_name == 'global_score_ordering_random':
+        ctor_args['alfa'] = alpha
+        ctor_args['weight_flows'] = constructor_kwargs.get('weight_flows', 0.2)
+
     elif constructor_name == 'global_score_ordering':
-        # Este constructor tiene weight_flows en lugar de alfa
         ctor_args['weight_flows'] = constructor_kwargs.get('weight_flows', 0.2)
 
     # Agregar cualquier parámetro adicional

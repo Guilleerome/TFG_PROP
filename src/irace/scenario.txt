@@ -19,7 +19,7 @@ targetRunnerLauncher = "python"
 # --- Presupuesto ---
 # 2 parámetros × 500 = 1000 (mínimo recomendado)
 # Usamos 5000 para mejor exploración
-maxExperiments = 5000
+maxExperiments = 10000
 
 # --- Racing configuration ---
 # firstTest: número mínimo de instancias antes de empezar a descartar configuraciones
@@ -33,7 +33,7 @@ eachTest = 1
 confidence = 0.95
 
 # Tipo de test
-testType = "F-test"
+testType = "friedman"
 
 # --- Paralelización ---
 # 3 cores (de 4 disponibles, dejamos 1 para el sistema)

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-run_irace.py - Ejecutar irace desde Python (versión definitiva)
+run_irace.py - Ejecutar irace desde Python
 
-Este script configura y ejecuta irace completamente desde Python,
-evitando los bugs de readScenario() en Windows.
+Script para ejecutar irace con calibración completa de GRASP:
+- Constructores
+- Parámetros de constructores (alpha, sample_size)
+- Búsquedas locales (secuencia)
+- Parámetros de búsquedas locales (ls_sample_size)
 
 Uso desde PyCharm:
-    - Click derecho en este archivo → Run 'run_irace'
+    - Click derecho → Run 'run_irace'
 
 Uso desde terminal:
     python run_irace.py
@@ -14,29 +17,17 @@ Uso desde terminal:
 
 import subprocess
 import sys
+import tempfile
+import os
 from pathlib import Path
 
 # ============================================================================
 # CONFIGURACIÓN - Modifica estos valores según tus necesidades
 # ============================================================================
 
-# Parámetros a calibrar
-PARAMETERS = {
-    'alpha': {
-        'type': 'r',  # real
-        'range': (0.1, 1.0),
-        'description': 'Parámetro alpha del constructor'
-    },
-    'sample_size': {
-        'type': 'i',  # integer
-        'range': (10, 200),
-        'description': 'Tamaño de muestra'
-    }
-}
-
 # Configuración de irace
 IRACE_CONFIG = {
-    'maxExperiments': 5000,
+    'maxExperiments': 10000,
     'firstTest': 5,
     'eachTest': 1,
     'confidence': 0.95,
@@ -60,7 +51,6 @@ def find_r_executable():
         if not base_path.exists():
             continue
 
-        # Buscar versiones de R (R-4.x.x)
         for r_version_dir in sorted(base_path.glob("R-*"), reverse=True):
             rscript_path = r_version_dir / "bin" / "Rscript.exe"
             if rscript_path.exists():
@@ -71,7 +61,7 @@ def find_r_executable():
 
 def main():
     print("=" * 70)
-    print("irace - Calibración Automática de Parámetros")
+    print("irace - Calibración Completa de GRASP")
     print("=" * 70)
 
     # Directorios
@@ -86,6 +76,7 @@ def main():
     print("\n✓ Verificando archivos...")
     files_to_check = {
         "target_runner.py": irace_dir / "target_runner.py",
+        "parameters.txt": irace_dir / "parameters.txt",
         "instances/": irace_dir / "instances",
         "Python venv": venv_python,
     }
@@ -124,51 +115,34 @@ def main():
     irace_dir_r = str(irace_dir).replace('\\', '/')
     venv_python_r = str(venv_python).replace('\\', '/')
 
-    # Construir definición de parámetros
-    params_r = []
-    for param_name, param_config in PARAMETERS.items():
-        ptype = param_config['type']
-        prange = param_config['range']
-        if ptype == 'r':
-            params_r.append(f'{param_name}  ""  r  ({prange[0]}, {prange[1]})')
-        elif ptype == 'i':
-            params_r.append(f'{param_name}  ""  i  ({prange[0]}, {prange[1]})')
-
-    params_text = '\\n'.join(params_r)
-
-    # Script R completo
+    # Script R que lee parameters.txt
     r_script = f"""
 library(irace)
 
 cat("\\n")
 cat("======================================================================\\n")
-cat("Iniciando calibración con irace\\n")
+cat("Iniciando calibración completa de GRASP con irace\\n")
 cat("======================================================================\\n\\n")
 
 # Cambiar al directorio de trabajo
 setwd("{irace_dir_r}")
 
-# Definir parámetros
-parameters <- readParameters(text = '
-{params_text}
-')
+# Leer parámetros desde parameters.txt
+parameters <- readParameters(file = "parameters.txt")
 
 cat("Parámetros a calibrar:\\n")
 print(parameters$names)
 cat("\\n")
+cat("Número de parámetros:", length(parameters$names), "\\n\\n")
 
-# Listar instancias con nombres descriptivos
-instance_files <- list.files("instances", pattern = "\\\\.txt$", full.names = TRUE)
+# Listar instancias
+instance_files <- list.files("instances", pattern = "[.]txt$", full.names = TRUE)
 instance_names <- basename(tools::file_path_sans_ext(instance_files))
 
-# Crear data frame con ID y nombre
-instances <- data.frame(
-  instance = instance_files,
-  stringsAsFactors = FALSE
-)
-rownames(instances) <- instance_names
+instances <- instance_files
+names(instances) <- instance_names
 
-cat("Número de instancias:", nrow(instances), "\\n")
+cat("Número de instancias:", length(instances), "\\n")
 cat("Primeras instancias:", paste(head(instance_names, 5), collapse=", "), "...\\n\\n")
 
 # Configurar scenario
@@ -218,13 +192,18 @@ print(result)
 cat("\\nResultados guardados en: irace.Rdata\\n")
 """
 
-    # Ejecutar R
+    # Escribir el script R a un archivo temporal
+    r_script_path = irace_dir / "_irace_run.R"
+    r_script_path.write_text(r_script, encoding='utf-8')
+    print(f"📝 Script R generado: {r_script_path}")
+
+    # Ejecutar R con --file en lugar de -e (evita límite de longitud en Windows)
     print("\n🚀 Ejecutando irace...\n")
     print("=" * 70)
 
     try:
         result = subprocess.run(
-            [str(rscript_path), "-e", r_script],
+            [str(rscript_path), "--file", str(r_script_path)],
             cwd=str(irace_dir),
             capture_output=False,
             text=True
@@ -238,16 +217,22 @@ cat("\\nResultados guardados en: irace.Rdata\\n")
             print("\nPara ver los resultados en R:")
             print("  load('irace.Rdata')")
             print("  print(iraceResults)")
-            return 0
         else:
             print(f"\n❌ irace terminó con errores (código {result.returncode})")
-            return result.returncode
+            print(f"\n💡 Puedes inspeccionar el script R generado en: {r_script_path}")
+
+        return result.returncode
 
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
         return 1
+
+    finally:
+        # Limpiar el archivo temporal si fue bien
+        if result.returncode == 0 and r_script_path.exists():
+            r_script_path.unlink()
 
 
 if __name__ == "__main__":

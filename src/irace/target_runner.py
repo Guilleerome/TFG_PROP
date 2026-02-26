@@ -87,35 +87,33 @@ def convert_param_types(params):
     return converted
 
 
+CONSTRUCTORS_NO_SAMPLE = {'global_score_ordering', 'global_score_ordering_random'}
+
 def build_algorithm_params(params):
-    """
-    Construye los parámetros específicos para run_algorithm
-
-    Args:
-        params: dict con parámetros parseados
-
-    Returns:
-        dict con parámetros listos para run_algorithm
-    """
     algo_params = {}
 
-    # Tipo de algoritmo (por defecto GRASP)
     algorithm = params.get('algorithm', 'grasp')
+    constructor = params.get('constructor', '')
 
-    # Parámetros comunes de GRASP
     if 'constructor' in params:
-        algo_params['constructor_name'] = params['constructor']
+        algo_params['constructor_name'] = constructor
 
     if 'alpha' in params:
         algo_params['alpha'] = params['alpha']
 
-    if 'sample_size' in params:
-        algo_params['sample_size'] = params['sample_size']
+    # sample_size solo para constructores que lo soportan
+    if constructor not in CONSTRUCTORS_NO_SAMPLE:
+        if 'sample_size' in params:
+            algo_params['sample_size'] = params['sample_size']
+
+    # weight_flows solo para global_score_ordering
+    if constructor in CONSTRUCTORS_NO_SAMPLE:
+        if 'weight_flows' in params:
+            algo_params['weight_flows'] = params['weight_flows']
 
     if 'ls_sample_size' in params:
         algo_params['ls_sample_size'] = params['ls_sample_size']
 
-    # Búsquedas locales (construir secuencia)
     ls_sequence = []
     if 'ls1' in params and params['ls1'] != 'none':
         ls_sequence.append(params['ls1'])
