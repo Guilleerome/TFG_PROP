@@ -171,68 +171,6 @@ def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=
 
     return Solution(plant=plant, disposition=disposition)
 
-def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
-    rows = plant.rows
-    evaluator = plant.evaluator
-    disposition: List[List[int]] = [[] for _ in range(rows)]
-
-    evaluator.reset()
-    facilities_by_row = build_facilities_by_row(plant.capacities)
-
-    for row in range(rows):
-        random_facility_start = random.choice(facilities_by_row[row])
-        disposition[row].append(random_facility_start)
-        evaluator.push_move(row, random_facility_start)
-        facilities_by_row[row].remove(random_facility_start)
-
-    cost = 0
-    for row in random.sample(range(rows), rows):
-        while facilities_by_row[row]:
-
-            available_facilities = select_random_candidates_random_greedy(facilities_by_row[row], alfa, sample_size)
-            candidates = evaluate_best_insertions_in_row(row, available_facilities, disposition, evaluator)
-
-            selected_facility, cost, selected_position = min(candidates, key=lambda x: x[1])
-            disposition[row].insert(selected_position, selected_facility)
-            evaluator.push_move(row, selected_facility, position=selected_position)
-            facilities_by_row[row].remove(selected_facility)
-
-    return Solution(plant=plant, disposition=disposition, cost = cost)
-
-def constructor_random_greedy_global(plant: Plant, alfa: float, sample_size: int = 40) -> Solution:
-    rows = plant.rows
-    evaluator = plant.evaluator
-    disposition = [[] for _ in range(rows)]
-
-    evaluator.reset()
-    facilities_by_row = build_facilities_by_row(plant.capacities)
-
-    for row in range(rows):
-        if facilities_by_row[row]:
-            initial_facility = random.choice(facilities_by_row[row])
-            disposition[row].append(initial_facility)
-            evaluator.push_move(row, initial_facility)
-            facilities_by_row[row].remove(initial_facility)
-
-    remaining = [(r, f) for r in range(rows) for f in facilities_by_row[r]]
-    cost = 0
-
-    while remaining:
-        q = len(remaining)
-        s = max(1, int(alfa * q))
-        candidates_sample = random.sample(remaining, min(s, sample_size))
-        candidates = evaluate_best_insertion_candidates(candidates_sample, disposition, evaluator)
-
-        # Selección puramente greedy
-        selected_facility, selected_row, cost, selected_position = min(candidates, key=lambda x: x[2])
-
-        disposition[selected_row].insert(selected_position, selected_facility)
-        evaluator.push_move(selected_row, selected_facility, position=selected_position)
-        facilities_by_row[selected_row].remove(selected_facility)
-        remaining.remove((selected_row, selected_facility))
-
-    return Solution(plant=plant, disposition=disposition, cost=cost)
-
 def constructor_greedy_random_row_balanced(plant: Plant, alfa: float = 0.3, sample_size: int = 40) -> Solution:
     evaluator = plant.evaluator
     rows = plant.rows
@@ -271,6 +209,68 @@ def constructor_greedy_random_row_balanced(plant: Plant, alfa: float = 0.3, samp
         facilities_by_row[r].remove(selected_facility)
 
     return Solution(plant, disposition)
+
+def constructor_random_greedy_global(plant: Plant, alfa: float, sample_size: int = 40) -> Solution:
+    rows = plant.rows
+    evaluator = plant.evaluator
+    disposition = [[] for _ in range(rows)]
+
+    evaluator.reset()
+    facilities_by_row = build_facilities_by_row(plant.capacities)
+
+    for row in range(rows):
+        if facilities_by_row[row]:
+            initial_facility = random.choice(facilities_by_row[row])
+            disposition[row].append(initial_facility)
+            evaluator.push_move(row, initial_facility)
+            facilities_by_row[row].remove(initial_facility)
+
+    remaining = [(r, f) for r in range(rows) for f in facilities_by_row[r]]
+    cost = 0
+
+    while remaining:
+        q = len(remaining)
+        s = max(1, int(alfa * q))
+        candidates_sample = random.sample(remaining, min(s, sample_size))
+        candidates = evaluate_best_insertion_candidates(candidates_sample, disposition, evaluator)
+
+        # Selección puramente greedy
+        selected_facility, selected_row, cost, selected_position = min(candidates, key=lambda x: x[2])
+
+        disposition[selected_row].insert(selected_position, selected_facility)
+        evaluator.push_move(selected_row, selected_facility, position=selected_position)
+        facilities_by_row[selected_row].remove(selected_facility)
+        remaining.remove((selected_row, selected_facility))
+
+    return Solution(plant=plant, disposition=disposition, cost=cost)
+
+def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
+    rows = plant.rows
+    evaluator = plant.evaluator
+    disposition: List[List[int]] = [[] for _ in range(rows)]
+
+    evaluator.reset()
+    facilities_by_row = build_facilities_by_row(plant.capacities)
+
+    for row in range(rows):
+        random_facility_start = random.choice(facilities_by_row[row])
+        disposition[row].append(random_facility_start)
+        evaluator.push_move(row, random_facility_start)
+        facilities_by_row[row].remove(random_facility_start)
+
+    cost = 0
+    for row in random.sample(range(rows), rows):
+        while facilities_by_row[row]:
+
+            available_facilities = select_random_candidates_random_greedy(facilities_by_row[row], alfa, sample_size)
+            candidates = evaluate_best_insertions_in_row(row, available_facilities, disposition, evaluator)
+
+            selected_facility, cost, selected_position = min(candidates, key=lambda x: x[1])
+            disposition[row].insert(selected_position, selected_facility)
+            evaluator.push_move(row, selected_facility, position=selected_position)
+            facilities_by_row[row].remove(selected_facility)
+
+    return Solution(plant=plant, disposition=disposition, cost = cost)
 
 def constructor_random_greedy_row_balanced(plant: Plant, alfa: float = 0.3, sample_size: int = 40) -> Solution:
     evaluator = plant.evaluator
