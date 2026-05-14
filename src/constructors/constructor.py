@@ -125,7 +125,7 @@ def constructor_greedy_random_by_row(plant: Plant, alfa: float, sample_size:int=
             evaluator.push_move(row, selected_facility, position=selected_position)
             available_facilities.remove(selected_facility)
 
-    return Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition)
 
 def constructor_greedy_random_global(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
@@ -242,7 +242,7 @@ def constructor_random_greedy_global(plant: Plant, alfa: float, sample_size: int
         facilities_by_row[selected_row].remove(selected_facility)
         remaining.remove((selected_row, selected_facility))
 
-    return Solution(plant=plant, disposition=disposition, cost=cost)
+    return Solution(plant=plant, disposition=disposition)
 
 def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=40) -> Solution:
     rows = plant.rows
@@ -270,7 +270,7 @@ def constructor_random_greedy_by_row(plant: Plant, alfa: float, sample_size:int=
             evaluator.push_move(row, selected_facility, position=selected_position)
             facilities_by_row[row].remove(selected_facility)
 
-    return Solution(plant=plant, disposition=disposition, cost = cost)
+    return Solution(plant=plant, disposition=disposition)
 
 def constructor_random_greedy_row_balanced(plant: Plant, alfa: float = 0.3, sample_size: int = 40) -> Solution:
     evaluator = plant.evaluator

@@ -50,7 +50,7 @@ def first_move_swap(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
     evaluator = plant.evaluator
 
-    best_disp = copy_disposition(solution.disposition)
+    disp = copy_disposition(solution.disposition)
     best_cost = solution.cost
     improved = True
 
@@ -59,26 +59,25 @@ def first_move_swap(solution: Solution, s: int=500) -> Solution:
         order_rows = np.random.permutation(len(solution.disposition))
 
         for i in order_rows:
-            q = len(best_disp[i])
+            q = len(disp[i])
             if q < 2:
                 continue
 
             pairs = _sample_swap_pairs(q, s)
             for j, k in pairs:
-                disposition_aux = copy_disposition(best_disp)
-                swap_facilities(disposition_aux, i, j, k)
-
-                cost_aux = evaluator.evaluate(disposition_aux)
+                swap_facilities(disp, i, j, k)
+                cost_aux = evaluator.evaluate(disp)
 
                 if cost_aux < best_cost:
-                    best_disp = disposition_aux
                     best_cost = cost_aux
                     improved = True
                     break
+                else:
+                    swap_facilities(disp, i, j, k)
             if improved:
                 break
 
-    return Solution(plant=plant, disposition=best_disp, cost=best_cost)
+    return Solution(plant=plant, disposition=disp, cost=best_cost)
 
 def best_move_swap(solution: Solution, s: int=500) -> Solution:
     plant = solution.plant
@@ -221,27 +220,35 @@ def _best_move_swap_once(solution: Solution, s: int=500) -> tuple[Solution, bool
         new_sol = Solution(plant, best_swap_disp, cost=current_best_cost)
         return new_sol, True
 
+
 def _best_swap(plant, disp: list[list[int]], current_cost: float, s: int) -> tuple[Optional[list[list[int]]], float]:
     evaluator = plant.evaluator
 
     best_cost = current_cost
-    best_disp = None
+    work = copy_disposition(disp)
+    best_swap_info: Optional[tuple[int, int, int]] = None
 
-    for i in range(len(disp)):
-        q = len(disp[i])
+    for i in np.random.permutation(len(work)):
+        q = len(work[i])
         if q < 2:
             continue
 
         for j, k in _sample_swap_pairs(q, s):
-            candidate_disp = copy_disposition(disp)
-            swap_facilities(candidate_disp, i, j, k)
+            swap_facilities(work, i, j, k)
 
-            cost_aux = evaluator.evaluate(candidate_disp)
+            cost_aux = evaluator.evaluate(work)
+
+            swap_facilities(work, i, j, k)
             if cost_aux < best_cost:
                 best_cost = cost_aux
-                best_disp = candidate_disp
+                best_swap_info = (i, j, k)
 
-    return best_disp, best_cost
+    if best_swap_info is None:
+        return None, current_cost
+
+    i, j, k = best_swap_info
+    swap_facilities(work, i, j, k)
+    return work, best_cost
 
 def iterative_local_search(plant, initial_solution):
 
