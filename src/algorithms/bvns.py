@@ -181,20 +181,6 @@ def run_bvns(
 
 # ── Nuevas perturbaciones adicionales ──────────────────────────────────────
 
-def _perturb_random_insert(disposition: list[list[int]]) -> list[list[int]]:
-    """Extrae una facility aleatoria y la reinserta en otra posición."""
-    new_disp = copy_disposition(disposition)
-    candidates = [r for r, row in enumerate(new_disp) if len(row) >= 2]
-    if not candidates:
-        return new_disp
-    row_idx = random.choice(candidates)
-    row = new_disp[row_idx]
-    j = random.randrange(len(row))
-    facility = row.pop(j)
-    k = random.randrange(len(row) + 1)
-    row.insert(k, facility)
-    return new_disp
-
 def _perturb_move_k_multi_row(disposition: list[list[int]], k: int = 2) -> list[list[int]]:
     """Aplica _perturb_move_k en dos filas distintas simultáneamente."""
     new_disp = _perturb_move_k(disposition, k)
@@ -209,6 +195,5 @@ ALL_PERTURBATIONS = {
     'move_k3':         lambda d: _perturb_move_k(d, k=3),
     'segment_inv':     lambda d: _perturb_segment_inversion(d),
     'double_swap':     lambda d: _perturb_double_swap(d),
-    'random_insert':   lambda d: _perturb_random_insert(d),
     'multi_row_k2':    lambda d: _perturb_move_k_multi_row(d, k=2),
 }
