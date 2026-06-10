@@ -2,10 +2,10 @@
 import random
 from typing import List, Optional
 
-from models.plant import Plant
-from models.solution import Solution
+from src.models.plant import Plant
+from src.models.solution import Solution
 from .registry import CONSTRUCTORS, LOCAL_SEARCHES
-from improvers.local_search import (
+from src.improvers.local_search import (
     copy_disposition,
     swap_facilities,
     first_move,

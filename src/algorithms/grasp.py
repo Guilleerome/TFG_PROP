@@ -1,7 +1,7 @@
 
 from typing import Optional, List, Callable
-from models.plant import Plant
-from models.solution import Solution
+from src.models.plant import Plant
+from src.models.solution import Solution
 from .registry import CONSTRUCTORS, LOCAL_SEARCHES
 
 

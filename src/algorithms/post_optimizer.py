@@ -11,10 +11,6 @@ from .registry import LOCAL_SEARCHES
 
 # ── Todas las LS disponibles ───────────────────────────────────────────────
 ALL_LS_SEQUENCES = [
-    ['first_move_swap'],
-    ['best_move_swap'],
-    ['first_move'],
-    ['best_move'],
     ['first_move_swap', 'best_move'],
     ['best_move_swap', 'first_move'],
     ['first_move_swap', 'best_move', 'first_move'],

@@ -1,7 +1,7 @@
 
 from typing import Dict, Any
-from models.plant import Plant
-from models.solution import Solution
+from src.models.plant import Plant
+from src.models.solution import Solution
 from .grasp import run_grasp
 from .bvns import run_bvns
 
