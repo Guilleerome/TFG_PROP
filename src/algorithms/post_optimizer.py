@@ -5,7 +5,7 @@ from typing import Optional
 from models.plant import Plant
 from models.solution import Solution
 from improvers.local_search import copy_disposition
-from .bvns import ALL_PERTURBATIONS
+from .perturbations import ALL_PERTURBATIONS
 from .registry import LOCAL_SEARCHES
 
 
