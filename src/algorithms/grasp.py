@@ -12,40 +12,10 @@ def run_grasp(
         alpha: float = 0.3,
         sample_size: int = 40,
         ls_sample_size: int = 500,
+        n_starts: int = 1,
         **constructor_kwargs
 ) -> Solution:
-    """
-    Ejecuta GRASP completo: constructor + búsqueda(s) local(es)
 
-    Args:
-        plant: Instancia del problema
-        constructor_name: Nombre del constructor a usar (ver CONSTRUCTORS)
-        ls_sequence: Lista de búsquedas locales a aplicar en orden.
-                     Ej: ['best_move_swap', 'first_move']
-                     Si es None o vacío, no se aplica búsqueda local.
-        alpha: Parámetro alpha para constructores aleatorios (0.1-1.0)
-        sample_size: Tamaño de muestra para constructores
-        ls_sample_size: Parámetro 's' para búsquedas locales
-        **constructor_kwargs: Argumentos adicionales específicos del constructor
-
-    Returns:
-        Solution: Solución mejorada (o inicial si no hay LS)
-
-    Raises:
-        ValueError: Si el constructor o búsqueda local no existe o alpha/sample_size fuera de rango
-
-    Examples:
-        >>> # GRASP básico con un solo LS
-        >>> sol = run_grasp(plant, 'greedy_random_by_row', ['best_move_swap'])
-
-        >>> # GRASP con secuencia de LS
-        >>> sol = run_grasp(plant, 'greedy_random_by_row',
-        ...                 ['best_move_swap', 'first_move'])
-
-        >>> # Solo constructor (sin LS)
-        >>> sol = run_grasp(plant, 'greedy_random_by_row', ls_sequence=None)
-    """
-    # Validar constructor
     if constructor_name not in CONSTRUCTORS:
         raise ValueError(
             f"Constructor '{constructor_name}' no existe. "
@@ -88,21 +58,26 @@ def run_grasp(
     # Agregar cualquier parámetro adicional
     ctor_args.update(constructor_kwargs)
 
-    # Ejecutar constructor
-    solution = constructor(**ctor_args)
+    best = None
+    for _ in range(n_starts):
+        # Ejecutar constructor
+        solution = constructor(**ctor_args)
 
-    # 2. FASE DE BÚSQUEDA LOCAL
-    if ls_sequence:
-        for ls_name in ls_sequence:
-            if ls_name == 'none':
-                continue
+        # 2. FASE DE BÚSQUEDA LOCAL
+        if ls_sequence:
+            for ls_name in ls_sequence:
+                if ls_name == 'none':
+                    continue
 
-            ls_function = LOCAL_SEARCHES[ls_name]
-            if ls_function is None:
-                continue
+                ls_function = LOCAL_SEARCHES[ls_name]
+                if ls_function is None:
+                    continue
 
-            # Aplicar búsqueda local
-            solution = ls_function(solution, s=ls_sample_size)
+                # Aplicar búsqueda local
+                solution = ls_function(solution, s=ls_sample_size)
 
-    return solution
+        if best is None or solution.cost < best.cost:
+            best = solution
+
+    return best
 

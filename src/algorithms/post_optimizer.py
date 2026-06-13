@@ -56,23 +56,7 @@ def run_from_solution(
     ls_sequences: Optional[list[list[str]]] = None,
     verbose: bool = True,
 ) -> tuple[Solution, list[dict]]:
-    """
-    Partiendo de una solución ya construida, prueba en paralelo todas las
-    combinaciones de perturbación × búsqueda local e intenta mejorarla.
 
-    Args:
-        base_solution:  Solución de partida (la mejor conocida).
-        ls_sample_size: Tamaño de muestra para las LS.
-        perturbations:  Lista de nombres de perturbaciones a probar.
-                        Por defecto usa ALL_PERTURBATIONS (todas).
-        ls_sequences:   Lista de secuencias LS a probar.
-                        Por defecto usa ALL_LS_SEQUENCES (todas).
-        verbose:        Imprime resultados por consola.
-
-    Returns:
-        best_solution:  La mejor solución encontrada (puede ser la misma base).
-        results:        Lista de dicts con todos los resultados ordenados por coste.
-    """
     plant = base_solution.plant
     base_disp = base_solution.disposition
     base_cost = base_solution.cost

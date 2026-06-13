@@ -73,9 +73,9 @@ def convert_param_types(params):
 
     for key, value in params.items():
         # Parámetros numéricos
-        if key in ['alpha', 'weight_flows']:
+        if key in ['alpha', 'weight_flows', 'kmax_ratio']:
             converted[key] = float(value)
-        elif key in ['sample_size', 'ls_sample_size']:
+        elif key in ['sample_size', 'ls_sample_size', 'n_starts']:
             converted[key] = int(value)
         # Parámetros categóricos (strings)
         elif key in ['constructor', 'ls1', 'ls2', 'algorithm']:
@@ -122,6 +122,12 @@ def build_algorithm_params(params):
 
     if ls_sequence:
         algo_params['ls_sequence'] = ls_sequence
+
+    if algorithm == 'bvns':
+        if 'kmax_ratio' in params:
+            algo_params['kmax_ratio'] = params['kmax_ratio']
+        if 'n_starts' in params:
+            algo_params['n_starts'] = params['n_starts']
 
     return algorithm, algo_params
 

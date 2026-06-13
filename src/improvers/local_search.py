@@ -220,7 +220,6 @@ def _best_move_swap_once(solution: Solution, s: int=500) -> tuple[Solution, bool
         new_sol = Solution(plant, best_swap_disp, cost=current_best_cost)
         return new_sol, True
 
-
 def _best_swap(plant, disp: list[list[int]], current_cost: float, s: int) -> tuple[Optional[list[list[int]]], float]:
     evaluator = plant.evaluator
 

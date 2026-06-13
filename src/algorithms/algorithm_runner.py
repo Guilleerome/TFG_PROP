@@ -4,12 +4,12 @@ from src.models.plant import Plant
 from src.models.solution import Solution
 from .grasp import run_grasp
 from .ils import run_ils
-from .vns import run_vns
+from .bvns import run_bvns
 
 ALGORITHMS = {
     'grasp': run_grasp,
     # 'bvns': run_ils,  # Futuro
-    'vns': run_vns,
+    'bvns': run_bvns,
     'ils': run_ils,
 }
 

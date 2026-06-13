@@ -20,7 +20,6 @@ class CostEvaluator:
 
     @staticmethod
     def _centers_for_row(row_facilities: List[int], sizes: np.ndarray) -> np.ndarray:
-        """Return center positions for a row given facility IDs in order."""
         if not row_facilities:
             return np.empty(0, dtype=float)
         widths = sizes[row_facilities]

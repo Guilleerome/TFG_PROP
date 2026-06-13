@@ -15,7 +15,7 @@ from .perturbations import (
     perturb_move_k,
 )
 
-def run_vns(
+def run_bvns(
         plant: Plant,
         constructor_name: str,
         ls_sequence: Optional[List[str]] = None,
@@ -23,26 +23,24 @@ def run_vns(
         sample_size: int = 40,
         ls_sample_size: int = 500,
         n_starts: int = 10,
+        kmax_ratio: float = 0.25,
         **constructor_kwargs
 ) -> Solution:
 
     from src.algorithms.grasp import run_grasp
 
-    # Paso 1: Construir solución inicial con GRASP (constructor + LS)
-    for _ in range(n_starts):
-        best = None
-        current = run_grasp(
-            plant,
-            constructor_name=constructor_name,
-            ls_sequence=ls_sequence,
-            alpha=alpha,
-            sample_size=sample_size,
-            ls_sample_size=ls_sample_size,
-            **constructor_kwargs
-        )
+    current = run_grasp(
+        plant,
+        constructor_name=constructor_name,
+        ls_sequence=ls_sequence,
+        alpha=alpha,
+        sample_size=sample_size,
+        ls_sample_size=ls_sample_size,
+        n_starts=n_starts,
+        **constructor_kwargs
+    )
 
-        if best is None or current.cost < best.cost:
-            best = current
+
 
     evaluator = plant.evaluator
 
@@ -50,10 +48,11 @@ def run_vns(
     if ls_sequence:
         ls_functions = [LOCAL_SEARCHES[ls_name] for ls_name in ls_sequence if ls_name in LOCAL_SEARCHES]
 
+    kmax_ratio = max(1, int(kmax_ratio * plant.number))
     no_improve_count = 1
 
-    while no_improve_count <= 10:
-        perturbed_disp = perturb_move_k(best.disposition, k=no_improve_count)
+    while no_improve_count <= kmax_ratio:
+        perturbed_disp = perturb_move_k(current.disposition, k=no_improve_count)
         perturbed_cost = evaluator.evaluate(perturbed_disp)
         perturbed = Solution(plant, perturbed_disp, perturbed_cost)
 
@@ -61,10 +60,10 @@ def run_vns(
         for ls_func in ls_functions:
             improved_solution = ls_func(improved_solution, ls_sample_size)
 
-        if improved_solution.cost < best.cost:
-            best = improved_solution
+        if improved_solution.cost < current.cost:
+            current = improved_solution
             no_improve_count = 1
         else:
             no_improve_count += 1
 
-    return best
+    return current

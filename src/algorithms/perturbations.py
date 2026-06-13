@@ -8,20 +8,17 @@ from src.improvers.local_search import copy_disposition, swap_facilities
 def perturb_move_k(disposition: list[list[int]], k: int) -> list[list[int]]:
     new_disp = copy_disposition(disposition)
 
-    # Elegir una fila aleatoria con al menos k+1 elementos
-    candidates = [r for r, row in enumerate(new_disp) if len(row) > k]
-    if not candidates:
-        candidates = [r for r, row in enumerate(new_disp) if len(row) >= 2]
-    if not candidates:
-        return new_disp
 
-    row_idx = random.choice(candidates)
-    row = new_disp[row_idx]
-    q = len(row)
+    for _ in range(k):
+        candidates = [r for r, row in enumerate(new_disp) if len(row) > 2]
 
-    # Seleccionar k instalaciones distintas y moverlas a posiciones aleatorias
-    indices = random.sample(range(q), min(k, q))
-    for idx in sorted(indices, reverse=True):
+        if not candidates:
+            return new_disp
+
+        weights = [len(new_disp[r]) for r in candidates]
+        row_idx = random.choices(candidates, weights=weights, k=1)[0]
+        row = new_disp[row_idx]
+        idx = random.randrange(len(row))
         facility = row.pop(idx)
         new_pos = random.randrange(len(row) + 1)
         row.insert(new_pos, facility)

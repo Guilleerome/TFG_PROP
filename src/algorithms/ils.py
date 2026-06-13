@@ -34,22 +34,12 @@ def run_ils(
         alpha: float = 0.3,
         sample_size: int = 40,
         ls_sample_size: int = 500,
+        n_starts: int = 10,
         **constructor_kwargs
 ) -> Solution:
-    """
-    Estructura:
-        1. Construir solución inicial con el constructor dado.
-        2. Aplicar búsqueda local inicial.
-        3. Bucle BVNS:
-            a. Perturbar según el contador de no-mejora (1-5).
-            b. Aplicar búsqueda local a la solución perturbada.
-            c. Si mejora → actualizar mejor solución y reiniciar contador.
-               Si no mejora → incrementar contador.
-            d. Si contador > 5 → parar.
-    """
+
     from src.algorithms.grasp import run_grasp
 
-    # Paso 1: Construir solución inicial con GRASP (constructor + LS)
     current = run_grasp(
         plant,
         constructor_name=constructor_name,
@@ -57,10 +47,10 @@ def run_ils(
         alpha=alpha,
         sample_size=sample_size,
         ls_sample_size=ls_sample_size,
+        n_starts=n_starts,
         **constructor_kwargs
     )
 
-    best = current
     evaluator = plant.evaluator
 
     ls_functions = []
@@ -70,7 +60,7 @@ def run_ils(
     no_improve_count = 1
 
     while no_improve_count <= 5:
-        perturbed_disp = _apply_perturbation(best.disposition, no_improve_count)
+        perturbed_disp = _apply_perturbation(current.disposition, no_improve_count)
         perturbed_cost = evaluator.evaluate(perturbed_disp)
         perturbed = Solution(plant, perturbed_disp, perturbed_cost)
 
@@ -78,10 +68,10 @@ def run_ils(
         for ls_func in ls_functions:
             improved_solution = ls_func(improved_solution, ls_sample_size)
 
-        if improved_solution.cost < best.cost:
-            best = improved_solution
+        if improved_solution.cost < current.cost:
+            current = improved_solution
             no_improve_count = 1
         else:
             no_improve_count += 1
 
-    return best
+    return current
