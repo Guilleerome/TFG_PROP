@@ -9,34 +9,31 @@ from .perturbations import ALL_PERTURBATIONS
 from .registry import LOCAL_SEARCHES
 
 
-# ── Todas las LS disponibles ───────────────────────────────────────────────
+# ── Todas las secuencias de LS disponibles ──────────────────────────────────
 ALL_LS_SEQUENCES = [
     ['first_move_swap', 'best_move'],
-    ['best_move_swap', 'first_move'],
-    ['first_move_swap', 'best_move', 'first_move'],
+    ['first_move_swap', 'first_move'],
     ['best_move_swap', 'best_move'],
-    ['first_move', 'best_move'],
 ]
 
 
-def _apply_perturbation_by_name(disposition: list[list[int]], name: str) -> list[list[int]]:
-    return ALL_PERTURBATIONS[name](disposition)
+def _apply_perturbation_by_name(disposition: list[list[int]], name: str, k: int) -> list[list[int]]:
+    return ALL_PERTURBATIONS[name](disposition, k)
 
 
 def _worker(args: tuple) -> tuple[str, str, Solution]:
     """
-    Ejecuta una combinación perturbación + LS sobre una disposición base.
+    Ejecuta una combinacion perturbacion + LS sobre una disposicion base.
     Devuelve (perturb_name, ls_label, solution).
     """
-    plant, base_disposition, base_cost, perturb_name, ls_sequence, ls_sample_size = args
+    plant, base_disposition, base_cost, perturb_name, ls_sequence, ls_sample_size, k = args
 
-    # 1. Partir de la disposición base
+    # 1. Partir de la disposicion base
     disp = copy_disposition(base_disposition)
-    cost = base_cost
-    sol = Solution(plant, disp, cost)
+    sol = Solution(plant, disp, base_cost)
 
-    # 2. Perturbar
-    perturbed_disp = _apply_perturbation_by_name(sol.disposition, perturb_name)
+    # 2. Perturbar con intensidad k (proporcional al tamaño de la instancia)
+    perturbed_disp = _apply_perturbation_by_name(sol.disposition, perturb_name, k)
     perturbed_cost = plant.evaluator.evaluate(perturbed_disp)
     sol = Solution(plant, perturbed_disp, perturbed_cost)
 
@@ -52,67 +49,90 @@ def _worker(args: tuple) -> tuple[str, str, Solution]:
 def run_from_solution(
     base_solution: Solution,
     ls_sample_size: int = 480,
+    k_ratio: float = 0.15,
     perturbations: Optional[list[str]] = None,
     ls_sequences: Optional[list[list[str]]] = None,
-    verbose: bool = True,
+    max_passes: int = 10,
+    verbose: bool = False,
 ) -> tuple[Solution, list[dict]]:
 
     plant = base_solution.plant
-    base_disp = base_solution.disposition
-    base_cost = base_solution.cost
 
     perturb_names = perturbations or list(ALL_PERTURBATIONS.keys())
     sequences     = ls_sequences  or ALL_LS_SEQUENCES
 
-    # Generar todas las combinaciones
+    # k proporcional al tamaño de la instancia (nº de facilities a perturbar)
+    k = max(1, round(k_ratio * plant.number))
+
     combos = list(product(perturb_names, sequences))
-    total  = len(combos)
+    combos_per_pass = len(combos)
 
     if verbose:
-        print(f"\n[PostOpt] {plant.name} | coste base: {base_cost:.2f}")
-        print(f"[PostOpt] Probando {total} combinaciones "
+        print(f"\n[PostOpt] {plant.name} | coste base: {base_solution.cost:.2f}")
+        print(f"[PostOpt] k = {k} (ratio={k_ratio}, n={plant.number}) | "
+              f"{combos_per_pass} combinaciones/pasada "
               f"({len(perturb_names)} perturbaciones × {len(sequences)} LS)\n")
 
-    args_list = [
-        (plant, base_disp, base_cost, p_name, ls_seq, ls_sample_size)
-        for p_name, ls_seq in combos
-    ]
+    current = base_solution
+    all_results: list[dict] = []
 
-    results = []
-    best_solution = base_solution
-
+    # Un unico pool reutilizado en todas las pasadas
     with ProcessPoolExecutor() as executor:
-        futures = {executor.submit(_worker, args): args for args in args_list}
-        for future in as_completed(futures):
-            perturb_name, ls_label, sol = future.result()
-            improved = sol.cost < base_cost
-            results.append({
-                'perturbation': perturb_name,
-                'ls_sequence':  ls_label,
-                'cost':         sol.cost,
-                'improvement':  base_cost - sol.cost,
-                'improved':     improved,
-                'solution':     sol,
-            })
-            if sol.cost < best_solution.cost:
-                best_solution = sol
-                if verbose:
-                    print(f"  ✓ MEJORA  [{perturb_name}] + [{ls_label}] "
-                          f"→ {sol.cost:.2f}  (Δ={base_cost - sol.cost:.2f})")
+        pass_num = 0
+        improved = True
 
-    results.sort(key=lambda r: r['cost'])
+        while improved and pass_num < max_passes:
+            pass_num += 1
+            base_disp = current.disposition
+            base_cost = current.cost
+
+            args_list = [
+                (plant, base_disp, base_cost, p_name, ls_seq, ls_sample_size, k)
+                for p_name, ls_seq in combos
+            ]
+
+            best_of_pass = current
+            futures = {executor.submit(_worker, args): args for args in args_list}
+            for future in as_completed(futures):
+                perturb_name, ls_label, sol = future.result()
+                combo_improved = sol.cost < base_cost
+                all_results.append({
+                    'pass':         pass_num,
+                    'perturbation': perturb_name,
+                    'ls_sequence':  ls_label,
+                    'cost':         sol.cost,
+                    'improvement':  base_cost - sol.cost,
+                    'improved':     combo_improved,
+                    'solution':     sol,
+                })
+                if sol.cost < best_of_pass.cost:
+                    best_of_pass = sol
+
+            improved = best_of_pass.cost < current.cost
+            if improved:
+                if verbose:
+                    print(f"  ✓ Pasada {pass_num}: MEJORA "
+                          f"{current.cost:.2f} → {best_of_pass.cost:.2f} "
+                          f"(Δ={current.cost - best_of_pass.cost:.2f})")
+                current = best_of_pass        # realimentar la batería
+            else:
+                if verbose:
+                    print(f"  · Pasada {pass_num}: sin mejora, fin del post-opt.")
 
     if verbose:
-        improved_count = sum(1 for r in results if r['improved'])
-        print(f"\n[PostOpt] Combinaciones que mejoraron: {improved_count}/{total}")
-        print(f"[PostOpt] Mejor coste encontrado:      {best_solution.cost:.2f}")
-        if best_solution.cost < base_cost:
-            print(f"[PostOpt] Mejora total:                {base_cost - best_solution.cost:.2f}")
+        improved_count = sum(1 for r in all_results if r['improved'])
+        total = len(all_results)
+        print(f"\n[PostOpt] Pasadas ejecutadas:           {pass_num}")
+        print(f"[PostOpt] Combinaciones que mejoraron:  {improved_count}/{total}")
+        print(f"[PostOpt] Mejor coste encontrado:       {current.cost:.2f}")
+        if current.cost < base_solution.cost:
+            print(f"[PostOpt] Mejora total:                 {base_solution.cost - current.cost:.2f}")
         else:
-            print(f"[PostOpt] No se encontró mejora sobre el coste base.")
+            print(f"[PostOpt] No se encontro mejora sobre el coste base.")
         print("\n[PostOpt] Top 5 combinaciones:")
-        for r in results[:5]:
+        for r in sorted(all_results, key=lambda x: x['cost'])[:5]:
             tag = "✓" if r['improved'] else " "
-            print(f"  {tag} [{r['perturbation']}] + [{r['ls_sequence']}] → {r['cost']:.2f}")
+            print(f"  {tag} [p{r['pass']}] [{r['perturbation']}] + [{r['ls_sequence']}] → {r['cost']:.2f}")
 
-    return best_solution, results
+
+    return current

@@ -121,7 +121,7 @@ library(irace)
 
 cat("\\n")
 cat("======================================================================\\n")
-cat("Iniciando calibración completa de GRASP con irace\\n")
+cat("Iniciando calibración completa con irace\\n")
 cat("======================================================================\\n\\n")
 
 # Cambiar al directorio de trabajo
